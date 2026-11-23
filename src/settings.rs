@@ -1,8 +1,11 @@
 //! Display preferences do not change cell geometry or terminal colours.
+pub mod catalog;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
+pub mod preferences;
+#[cfg(feature = "desktop-services")]
 pub mod store;
 
 pub const MAX_SETTINGS_BYTES: usize = 8192;

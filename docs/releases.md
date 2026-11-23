@@ -2,6 +2,22 @@
 
 `develop` 是日常開發與一般 PR 的預設分支；`main`／`master` 只保留正式版號。此 repo 的正式分支是 `main`；若存在 `master`，適用相同規則，不需另建或改名。不要直接把功能分支合併或推送到 `main`，也不要在 GitHub 手動建立缺少下載檔的 Release。
 
+## 2026-11-18 Slint 入口切換與發佈封鎖
+
+`develop` 自 `ca09cd7` 起包含 Slint 版，`pttstella` 入口改為 Slint，Dioxus 版改名 `pttstella-dioxus`；切換前最後的 Dioxus 開發線保存在 `dioxus` 分支（`5ea9ad6`），正式版 `0.4.1` 由 `v0.4.1` tag 保存。`main` 維持 `0.4.1`。
+
+PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 GPL 版 mpv／FFmpeg。`Desktop Release` 已改為建置並打包 Slint：
+
+- 各 runner 以 `native-player-probe` 跑 Clippy、Slint／lib／multi-instance 測試及原生密碼庫案例，再由 `bundle_slint_release` 以正式名稱、App ID 與安裝路徑打包。
+- macOS 以 Homebrew 安裝 libmpv，收集實際 Mach-O 閉包放入 App；Windows 使用固定 SHA-256 的 mpv v0.42.0 官方 LGPL x64 DLL 與 app-local Visual C++ runtime，Setup 沿用原 AppId 原地升級、不再安裝 WebView2；Linux 依賴系統 `libmpv2`，不另行散布。
+- 每個平台另發佈 `-sources.tar`：`SOURCES.json` 列出 PTTStella commit、所有 crates.io 套件的下載網址與校驗碼、Skia 來源標籤，以及該平台內附 runtime 的原始碼。macOS 內含每個 Homebrew 套件依 SBOM（舊 bottle 沒有 SBOM 時改用已安裝 formula 固定的網址與 SHA-256）核對的原始碼壓縮檔、formula 與安裝紀錄；Windows 內含 mpv v0.42.0 原始碼及其簽章。官方 Windows DLL 靜態連結的 FFmpeg 等相依、Homebrew formula 以網址引用的補丁仍只有指引，`SOURCES.json` 標為 `partial`。
+
+2026-11-18 [verify run 44310874774](https://github.com/yam276/PTTStella/actions/runs/44310874774) 從乾淨 `c0851b1` 在四個 runner 通過工具／文件／核心檢查、`native-player-probe` 的 Clippy、Slint／lib／multi-instance 測試與 Windows／Linux 原生密碼庫案例，並各產出 3 個下載檔與 manifest：Windows Setup／portable ZIP／sources、兩個 macOS 的 DMG／ZIP／sources、Linux DEB／tar.gz／sources（artifact 約 159／356／361／72 MiB）。前四輪依序修正了 Windows 上的工具測試可攜性、媒體測試伺服器的自連喚醒、Visual C++ runtime 閉包、Intel runner 上沒有 SBOM 的舊 bottle，以及 ZIP 的 1980 年前時間戳。
+
+2026-11-19 macOS 15.7.7 arm64 實機下載同一 run 的 `release-macos-arm64`：四個 SHA256 相符、DMG checksum 有效，App 為 `io.github.yam276.pttstella` `0.5.0`、ad-hoc 簽章且 `codesign --deep --strict` 通過，`spctl` 拒絕（與 `0.4.1` 相同，依說明以「強制打開」放行）。主程式與 50 個 Frameworks 只連系統路徑或 App 內；從 DMG 複製到空的 `/Applications` 後，`--show-profile` 指向正式資料目錄與 Product 密碼範圍且未讀資料。已安裝 App 的隔離探針通過 product shell、終端翻頁、全文載入、草稿、內嵌圖片，以及以自製 320×180 四色 MP4 的 `--verify-media`（軟體渲染四點相符，`DYLD_PRINT_LIBRARIES` 顯示 libmpv／libavcodec 來自 App 內、零 Homebrew 路徑）。一般媒體探針第一次因視窗未在前景失敗、第二次通過，與先前的間歇結果相同。前後正式資料檔 SHA-256 不變。該 artifact 的可執行檔名仍是 `native`（`0.4.1` 為 `pttstella`），只影響程序／當機報告名稱；`4a2f1f6` 改由正式流程使用 Cargo bin 名稱，研究候選維持 `native`。同機從乾淨 `4a2f1f6` 以 `bundle_release.py` 打包的 DMG 內為 `Contents/MacOS/pttstella`，Info.plist、runtime manifest 首項與程序名一致，簽章、零外部連結、`--show-profile`、product shell 與四色影片探針通過，正式資料仍不變。[verify run 44450621456](https://github.com/yam276/PTTStella/actions/runs/44450621456) 從乾淨 `81ec655` 四平台通過；其 macOS arm64 artifact 的 SHA256 相符、sources `complete`，DMG 內為 `Contents/MacOS/pttstella`，簽章、`--show-profile` 與零外部連結通過。實際以正式資料開啟、從 `0.4.1` 升級後的設定與密碼庫存取、回退及 Gatekeeper 隔離下載流程尚待人工操作。
+
+發佈前仍需：各平台安裝／升級／回退與實際啟動（含 Windows 在沒有 WebView2 的環境）、README 與安裝說明更新，以及使用者指定版本。
+
 ## 何時執行發佈
 
 只有使用者明確要求發佈該版本，才進入下列發佈流程。平常的開發、修正、Critic、測試、提交與一般推送都保持在 `develop`；不自行切換或推進 `main`／`master`、建立其他工作／發佈分支、改用正式版號，或建立／合併 Release PR、Tag、GitHub Release。使用者另有明確分支指示時依其指示。
@@ -30,10 +46,12 @@
 
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
-| Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.exe`；兩者內嵌 CRT／資產／授權，Setup 可補裝 WebView2 |
-| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
-| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
-| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
+| Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.zip`；內含 libmpv、Visual C++ runtime 與授權，不需 WebView2 |
+| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
+| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
+| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；依賴系統 `libmpv2` |
+
+每個平台另有 `-sources.tar` 對應原始碼集，見上方 2026-11-18 說明。以下段落中 WebView2、static CRT 等描述屬 Dioxus 版。
 
 每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 涵蓋八個平台下載。Manifest 及其逐檔校驗保留在 Actions artifacts。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴，使用方式見 [Linux 套件說明](linux-package.txt)。
 

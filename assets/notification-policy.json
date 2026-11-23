@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "fade_ms": 500,
+  "persistent": { "wait_ms": null, "blocks_timed": false },
+  "error": { "wait_ms": null, "blocks_timed": true },
+  "copy": { "wait_ms": 2000, "blocks_timed": false },
+  "success": { "wait_ms": 3000, "blocks_timed": false }
+}

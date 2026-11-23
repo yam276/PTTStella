@@ -1,0 +1,51 @@
+import { PanelButton, PanelCombo, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
+
+export global DestinationState {
+    in-out property <[string]> labels;
+    in-out property <[string]> boards;
+    in-out property <bool> busy;
+    in-out property <bool> active;
+    in-out property <bool> composing;
+    in-out property <string> message;
+    in-out property <string> history-message;
+    in-out property <string> draft;
+    in-out property <int> choice:0;
+    callback choose(int);
+    callback field-edit(string)->string;
+    callback action(int);
+    callback close-destination;
+    in-out property <int> focus-draft-sequence;
+    public function focus-draft() { root.focus-draft-sequence += 1; }
+}
+
+export component DestinationPanel inherits PanelOverlay {
+    heading: DestinationState.labels[0];
+    panel-width: 700px; panel-height: 460px;
+    private property <int> focus-draft-sequence: DestinationState.focus-draft-sequence;
+    changed focus-draft-sequence => { input.focus(); }
+    FocusScope {
+        key-pressed(event)=>{
+            if event.text==Key.Escape && !DestinationState.composing && !event.repeat {DestinationState.close-destination();return accept;}
+            if event.text==Key.Return && !DestinationState.composing && !event.repeat && !DestinationState.busy {DestinationState.action(0);return accept;}
+            return reject;
+        }
+        PanelScrollView {
+            content-width: self.visible-width;
+        VerticalLayout {alignment: start; padding:16px;spacing:10px;
+            Text {text:DestinationState.labels[1];color:#c7d4e7;}
+            input:=PanelField {text<=>DestinationState.draft;accessible-label:DestinationState.labels[1];enabled:!DestinationState.busy;edited=>{self.text=DestinationState.field-edit(self.text);}accepted=>{if !DestinationState.composing && !DestinationState.busy {DestinationState.action(0);}}}
+            Text {text:DestinationState.labels[2];color:#9ab5ce;wrap:word-wrap;}
+            Text {text:DestinationState.labels[3];color:#c7d4e7;}
+            PanelCombo {model:DestinationState.boards;current-index<=>DestinationState.choice;enabled:root.visible && !DestinationState.busy && !DestinationState.composing;selected=>{DestinationState.choose(self.current-index);}}
+            Text {text:DestinationState.history-message;color:#9ab5ce;wrap:word-wrap;}
+            PanelButton {text:DestinationState.labels[4];enabled:!DestinationState.composing;clicked=>{DestinationState.action(2);}}
+            Text {text:DestinationState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+            HorizontalLayout {
+                PanelButton {text:DestinationState.labels[5];enabled:!DestinationState.busy && !DestinationState.composing && DestinationState.draft!="";clicked=>{DestinationState.action(0);}}
+                PanelButton {text:DestinationState.labels[6];enabled:DestinationState.active && !DestinationState.composing;clicked=>{DestinationState.action(1);}}
+                PanelButton {text:DestinationState.labels[7];enabled:!DestinationState.composing;clicked=>{DestinationState.close-destination();}}
+            }
+        }
+        }
+    }
+}

@@ -16,7 +16,7 @@ fn glyph_at(frame: &Frame, row: usize, col: usize) -> Option<&crate::screen::Gly
         .ok()
         .and_then(|i| frame.glyphs.get(i))
 }
-#[cfg(any(test, feature = "desktop"))]
+#[cfg(any(test, feature = "desktop-services"))]
 #[doc(hidden)]
 pub mod fixture;
 #[cfg(test)]

@@ -99,6 +99,7 @@ profile-unknown-action = Unknown profile operation
 link-open-failed = Cannot open URL: { $e }
 link-stale = The screen changed; select the link again
 paste-stale = The connection changed; paste was not sent
+paste-send-unconfirmed = Paste delivery could not be confirmed
 cleanup-listeners-failed = Screen listener cleanup could not be verified
 command-stale = The connection changed; the result is unconfirmed and will not be resent
 probe-timeout = Screen probe timed out waiting for interaction
@@ -221,10 +222,6 @@ vim-cursor = Vim paused: selection marker or cursor is unconfirmed; press i for 
 vim-count-unsupported = This counted command is unsupported
 vim-count-capacity = Navigation count exceeds input capacity; the entire command was rejected
 vim-count-rejected = The entire command with an excessive count was rejected
-vim-g-unsupported = This g command is unsupported
-vim-chord-unsupported = This key combination has no Vim action
-vim-chord-count = This key combination or count has no Vim action
-vim-key-unsupported = This key or count has no Vim action; press f for native once, or i for native input
 encoding-unencodable = Text cannot be sent with the current station encoding
 selection-outside = Selection extends beyond the screen
 link-invalid = Invalid URL format
@@ -270,6 +267,10 @@ video-title = Video preview
 image-title = Image preview
 video-player = Video player
 video-pause = Pause video
+video-volume = Volume
+video-position = Playback position
+video-mute = Mute
+video-unmute = Unmute
 media-playing = Playing
 video-play = Play video
 media-paused = Paused
@@ -346,6 +347,7 @@ menu-select-all = Select All
 menu-minimize = Minimize
 menu-maximize = Zoom
 menu-fullscreen = Toggle Full Screen
+slint-menu-view = View
 menu-close = Close Window
 
 font-local-ascii = Local Latin font
@@ -533,6 +535,7 @@ context-copy = Copy selected text
 context-copy-ansi = Copy with ANSI colours
 context-copy-link = Copy full URL
 context-open-link = Open link / preview image
+context-open-link-external = Open link in browser
 context-select-link = Select full URL
 context-select-all = Select page text
 context-export-rows = Export selected rows as PNG…
@@ -702,6 +705,11 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = Close Settings
 about-author = Author: { $author }
 about-version = Version: { $version }
+about-font-sources = Font sources
+about-icon-licenses = Icon licenses
+about-dependency-licenses = Third-party component licenses
+about-full-notice = Full notices
+about-package-notices = The installation package includes the remaining third-party license notices.
 
 copy-png = Copy page PNG
 copy-rows-png = Copy selected rows PNG
@@ -866,3 +874,39 @@ draft-template-changed = The native title or body changed. Transfer stopped; reo
 draft-title-invalid = The title must be nonempty, contain no controls, and fit within 60 encoded bytes.
 
 draft-editor-unavailable = Unable to start the local composer. Continue in the PTT editor.
+
+draft-stop-requested = Stop requested; nothing will be resent. The station may contain partial changes. Check its screen; your local draft is retained.
+
+editor-color-palette-hint = Arrows choose colours · Tab for Apply · Esc cancels
+editor-color-working = Verifying and applying colours…
+editor-color-stop-requested = Stop requested; sent colour codes may remain. Check the station screen.
+
+slint-font-face-status = Requested: Latin { $requested_ascii } / CJK { $requested_cjk }. Drawing faces: { $ascii } / { $cjk }; missing glyphs may still use fallback faces.
+
+slint-menu-about = About PTTStella
+slint-menu-services = Services
+
+slint-article-heading = PTTStella  /  Article reading
+slint-execute = Run
+slint-select-text = Select text
+slint-drag-scroll = Drag to scroll
+slint-terminal-input = Terminal input
+slint-article-input = Station input in article
+slint-preview-image = Open full image preview
+slint-stop-requested = Stopping…
+slint-cancel-job = Cancel task
+slint-draft-color-hint = Select text, then right-click to color
+slint-clear-selection = Clear selection
+slint-draft-position = { $row }:{ $column } · { $lines } lines
+slint-draft-busy = Draft storage is busy; try again shortly
+slint-draft-choose = Choose a draft or create one from the full station template
+slint-draft-local = Editing locally; nothing is sent to the station automatically
+slint-draft-worker-stopped = Draft storage worker stopped
+slint-draft-worker-unconfirmed = Draft storage worker did not confirm completion
+slint-draft-no-document = No draft is open
+slint-draft-render-limit = Editor dimensions exceed the rendering limit
+
+slint-sites-current = Current connection: { $target }
+slint-sites-field-size = Input exceeds { $bytes } bytes or contains controls; the previous value is retained.
+
+slint-profile-imported = Display profile loaded. Valid changes are saved automatically.

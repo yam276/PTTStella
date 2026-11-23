@@ -7,19 +7,50 @@ pub(in crate::connection) fn page(
     total: usize,
     origin: Option<&str>,
 ) -> Result<Vec<u8>, String> {
+    make_page(first, last, total, origin, false)
+}
+pub(in crate::connection) fn roles_page(
+    first: usize,
+    last: usize,
+    total: usize,
+    origin: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    make_page(first, last, total, origin, true)
+}
+fn make_page(
+    first: usize,
+    last: usize,
+    total: usize,
+    origin: Option<&str>,
+    roles: bool,
+) -> Result<Vec<u8>, String> {
     let mut text = String::from("\x1b[0m\x1b[2J\x1b[H");
     for (row, line) in (first..=last).enumerate() {
         let body = match line {
-            1 => "作者 Stella (local fixture)                                   看板 Stella"
-                .to_owned(),
+            1 => format!(
+                "作者 {} (local fixture)                                   看板 Stella",
+                if roles { "Alice" } else { "Stella" }
+            ),
             2 => "標題 [測試] Live replies - local only".to_owned(),
             3 => "時間 Thu Oct 29 12:00:00 2026".to_owned(),
             6 => origin.map_or_else(
                 || "local image row".to_owned(),
                 |o| format!("{o}/colours.png"),
             ),
+            8 if roles => {
+                origin.map_or_else(|| "local GIF row".to_owned(), |o| format!("{o}/motion.gif"))
+            }
             40.. => format!(
-                "\x1b[1;37m推 \x1b[1;33mAlice\x1b[0;33m: REPLY {line:04}\x1b[0m\x1b[{};68H10/29 12:34",
+                "\x1b[1;37m推 \x1b[1;33m{}\x1b[0;33m: REPLY {line:04}\x1b[0m\x1b[{};68H10/29 12:34",
+                if roles {
+                    match line % 3 {
+                        0 => "Alice",
+                        1 => "StellaTest",
+                        _ => "Bob",
+                    }
+                } else {
+                    "Alice"
+                },
                 row + 1
             ),
             _ => format!("ROW {line:04} - stable article content"),
@@ -36,10 +67,12 @@ fn information() -> Result<Vec<u8>, String> {
 pub(super) async fn run<S>(
     socket: &mut WebSocketStream<S>,
     origin: Option<&str>,
+    roles: bool,
 ) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
+    let page = |first, last, total, origin| make_page(first, last, total, origin, roles);
     let started = std::time::Instant::now();
     let mut stages = vec![(b"\x1b[6~".to_vec(), page(23, 45, 45, origin)?)];
     for (old_first, old_last, total) in [(23, 45, 48), (26, 48, 51)] {
@@ -193,10 +226,12 @@ where
 pub(super) async fn cancel<S>(
     socket: &mut WebSocketStream<S>,
     origin: Option<&str>,
+    roles: bool,
 ) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
+    let page = |first, last, total, origin| make_page(first, last, total, origin, roles);
     for (expected, response) in [
         (b"\x1b[6~".as_slice(), page(23, 45, 45, origin)?),
         (b"Q", information()?),
@@ -269,6 +304,46 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mixed_fixture_keeps_author_own_and_focused_roles_through_append_pages() {
+        let mut screen = crate::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&roles_page(1, 23, 45, Some("http://127.0.0.1:9876")).unwrap());
+        let author = crate::reply_navigation::author(&screen.frame());
+        assert_eq!(author.as_deref(), Some("Alice"));
+        for (first, last, total, mine, author_rows, focused) in [
+            (23, 45, 45, vec![17, 20], vec![19, 22], vec![18, 21]),
+            (
+                26,
+                48,
+                48,
+                vec![14, 17, 20],
+                vec![16, 19, 22],
+                vec![15, 18, 21],
+            ),
+            (
+                29,
+                51,
+                51,
+                vec![11, 14, 17, 20],
+                vec![13, 16, 19, 22],
+                vec![12, 15, 18, 21],
+            ),
+        ] {
+            screen.feed(&roles_page(first, last, total, None).unwrap());
+            let replies = crate::filters::pushes(&screen.frame());
+            let index = crate::reply_navigation::index(
+                &replies,
+                &Default::default(),
+                false,
+                author.clone(),
+                Some("StellaTest"),
+                Some("Bob"),
+            );
+            assert_eq!(index.mine_rows, mine);
+            assert_eq!(index.author_rows, author_rows);
+            assert_eq!(index.focused_rows, focused);
+        }
+    }
     #[test]
     fn fixture_uses_real_push_styles_and_constant_identity_with_independent_counts() {
         let mut screen = crate::screen::Screen::new(80, 24).unwrap();

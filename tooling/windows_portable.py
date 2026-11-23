@@ -17,7 +17,7 @@ def build(notices):
              if env.get('CARGO_ENCODED_RUSTFLAGS') else env.get('RUSTFLAGS', '').split())
     env['CARGO_ENCODED_RUSTFLAGS'] = '\x1f'.join(flags+['-C', 'target-feature=+crt-static'])
     env['PTTSTELLA_NOTICES_FILE'] = str(notices.resolve())
-    return bundle_common.build(TARGET, env=env)
+    return bundle_common.build(TARGET, env=env, features='desktop', binary='pttstella-dioxus')
 
 
 def write_notices(licenses, destination):

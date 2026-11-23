@@ -66,6 +66,8 @@ pub fn app(props: AppProps) -> Element {
                 | "tools"
                 | "sites"
                 | "fonts"
+                | "parity_grid"
+                | "dual_gifs"
                 | "sgr66"
                 | "sgr66_legacy"
                 | "osc8"
@@ -124,20 +126,32 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_toast_reconnect_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
-                } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
-                    let long = sample_case.as_deref() == Some("long_load");
-                    Connection::start_article_load_probe(
-                        bytes,
-                        (2..=if long { 38 } else { 20 })
-                            .map(|page| {
-                                if long {
-                                    super::probe::long_load_page(page, media_origin.as_deref())
-                                } else {
-                                    super::probe::full_load_page(page, media_origin.as_deref())
-                                }
-                            })
-                            .collect::<Result<Vec<_>, _>>()?,
-                    )
+                } else if matches!(
+                    sample_case.as_deref(),
+                    Some("full_load" | "long_load" | "long_timing")
+                ) {
+                    let long = matches!(sample_case.as_deref(), Some("long_load" | "long_timing"));
+                    {
+                        let start = if std::env::var_os("PTTSTELLA_READING_PROBE_FAST").as_deref()
+                            == Some(std::ffi::OsStr::new("1"))
+                        {
+                            Connection::start_fast_article_load_probe
+                        } else {
+                            Connection::start_article_load_probe
+                        };
+                        start(
+                            bytes,
+                            (2..=if long { 38 } else { 20 })
+                                .map(|page| {
+                                    if long {
+                                        super::probe::long_load_page(page, media_origin.as_deref())
+                                    } else {
+                                        super::probe::full_load_page(page, media_origin.as_deref())
+                                    }
+                                })
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    }
                 } else if matches!(
                     sample_case.as_deref(),
                     Some("inline_pages" | "terminal_pages" | "short_overlap")
@@ -975,16 +989,16 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     section { "data-settings-page":"appearance", class: "settings-section",
                         label {
                             SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
-                            input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
+                            input { id: "font-size", r#type: "number", min: "8", max: "24", step: "any", required: true }
                         }
                         label {
                             SettingsCaption { label: pttstella::msg!("font-width"), icon: rsx! { ALargeSmall { size: 18 } } }
-                            input { id: "font-width", r#type: "number", min: "50", max: "150", step: "1", "aria-describedby": "settings-width-help" }
+                            input { id: "font-width", r#type: "number", min: "50", max: "150", step: "any", required: true, "aria-describedby": "settings-width-help" }
                         }
                         p { id: "settings-width-help", class: "settings-help", {pttstella::msg!("settings-width-help")} }
                         label {
                             SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
-                            input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
+                            input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "any", required: true, "aria-describedby": "settings-baseline-help" }
                         }
                         p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
                         div { class: "dialog-actions settings-actions",

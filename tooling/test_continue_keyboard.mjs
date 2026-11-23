@@ -1,4 +1,4 @@
-// Production bridge event routing; Rust tests own pause translation and repeats.
+// Production bridge event routing; Rust tests own terminal bytes and repeat suppression.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -13,9 +13,9 @@ function fixture(enabled=false){
     f.key=(key,extra={})=>{const e={key,code:'KeyJ',keyCode:0,isTrusted:true,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,shiftKey:false,repeat:false,prevented:false,preventDefault(){this.prevented=true;},...extra};f.keydown(e);return e;};
     return f;
 }
-test('ordinary, navigation, Escape and function keys reach Rust in both modes without textarea edits',()=>{
-    for(const enabled of [false,true])for(const key of ['j','i','f','3','Escape','Tab','Enter','F2','ArrowLeft','中']){
-        const f=fixture(enabled),e=f.key(key);assert.equal(e.prevented,true);assert.equal(f.sent.length,1);
+test('pause preserves the native text edit and sends terminal controls through keydown',()=>{
+    for(const enabled of [false,true])for(const key of ['Q','q',' ','j','i','f','3','Escape','Tab','Enter','F2','ArrowLeft','中']){
+        const f=fixture(enabled),e=f.key(key);assert.equal(e.prevented,[...key].length!==1);assert.equal(f.sent.length,1);
         assert.equal(f.sent[0].kind,'key');assert.equal(f.sent[0].key.key,key);assert.equal(f.sent[0].generation,7);
     }
 });
@@ -33,8 +33,9 @@ test('pause keeps native IME, clipboard, local shortcuts and modal editing owner
 });
 
 test('normal readonly CJK physical commands reach Rust, while native composition keeps its owner',()=>{
-    const normal=fixture(true),e=normal.key('Process',{keyCode:229});assert.equal(e.prevented,true);assert.equal(normal.sent[0].key.code,'KeyJ');
-    for(const f of [fixture(false),Object.assign(fixture(true),{composing:true})]){assert.equal(f.key('Process',{keyCode:229}).prevented,false);assert.deepEqual(f.sent,[]);}
+    const normal=fixture(true);normal.latest.navigation.kind='article_list';
+    const e=normal.key('Process',{keyCode:229});assert.equal(e.prevented,true);assert.equal(normal.sent[0].key.code,'KeyJ');
+    for(const f of [fixture(false),fixture(true),Object.assign(fixture(true),{composing:true})]){assert.equal(f.key('Process',{keyCode:229}).prevented,false);assert.deepEqual(f.sent,[]);}
 });
 test('CJK Control shortcuts use the physical command path without admitting text or stealing clipboard/IME',()=>{
     for(const enabled of [false,true])for(const keyCode of [0,229]){

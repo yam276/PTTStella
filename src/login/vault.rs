@@ -27,6 +27,16 @@ impl Job {
             .await
             .map_err(|_| crate::msg!("vault-incomplete").to_owned())?
     }
+    /// Native event loops poll only while this owned operation is active.
+    pub fn try_wait(&mut self) -> Result<Option<Outcome>, String> {
+        match self.result.try_recv() {
+            Ok(result) => result.map(Some),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => Ok(None),
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                Err(crate::msg!("vault-incomplete"))
+            }
+        }
+    }
 }
 impl Drop for Job {
     fn drop(&mut self) {
@@ -38,6 +48,15 @@ impl Drop for Job {
 
 pub struct Vault {
     service: String,
+}
+/// Data identities stay explicit while the native candidate is evaluated.
+/// Switching the candidate to the product service is a separate migration step.
+#[derive(Clone, Copy)]
+pub enum Scope {
+    Product,
+    SyntheticProbe,
+    SlintResearch,
+    SlintSyntheticProbe,
 }
 pub enum Action {
     Open,
@@ -75,11 +94,23 @@ pub const fn supported() -> bool {
 
 impl Vault {
     pub fn new(probe: bool) -> Self {
+        Self::for_scope(if probe {
+            Scope::SyntheticProbe
+        } else {
+            Scope::Product
+        })
+    }
+    pub fn for_scope(scope: Scope) -> Self {
         Self {
-            service: if probe {
-                "io.github.yam276.PTTStella.login.synthetic-probe.v1"
-            } else {
-                "io.github.yam276.PTTStella.login.ws.ptt.cc.v1"
+            service: match scope {
+                Scope::Product => "io.github.yam276.PTTStella.login.ws.ptt.cc.v1",
+                Scope::SyntheticProbe => "io.github.yam276.PTTStella.login.synthetic-probe.v1",
+                Scope::SlintResearch => {
+                    "io.github.yam276.PTTStella.slint-research.login.ws.ptt.cc.v1"
+                }
+                Scope::SlintSyntheticProbe => {
+                    "io.github.yam276.PTTStella.slint-research.login.synthetic-probe.v1"
+                }
             }
             .into(),
         }

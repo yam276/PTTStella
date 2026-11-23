@@ -1,5 +1,25 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-23 頁尾 100% 配色
+
+使用者回報網頁閱讀顯示 100% 時，頁尾有時仍是中間頁的配色而非結尾的藍色。原因是頁尾配色及頁數取可視起點最接近的來源頁，百分比卻依可視下緣計算；可視範圍比一頁高時，捲到底仍可能最接近較前面的頁。Rust 改為標記站端回報 100% 的結尾來源頁，Slint 與 Dioxus 在本機 100% 時都改用該頁的頁數與配色，未到 100% 時不借用結尾頁配色，只有結尾頁可用時才沿用。新增 Slint 頁尾與 Dioxus JS 回歸測試，確認舊邏輯會失敗；core、Slint 111 個與 Dioxus lib 386／bin 121／multi_instance 10 個測試、兩組 clippy 及 385 個 JS 測試通過。未在實站與已安裝 App 上操作。
+
+## 2026-11-19 移除文章浮動按鈕
+
+依使用者回報礙眼，Slint 文章畫面移除左上「推文定位」與左下「返回網頁閱讀」兩個浮動按鈕。推文定位仍由文章空白右鍵與浮球開啟，展開後的定位列不變；原始輸入切到站端畫面後不再提供浮動返回，需離開文章再進入，Vim `i` 進入的原始輸入仍以 Escape 返回。對應的 UI callback、標籤與 `slint-resume-reading` 字串一併移除，探針改呼叫同一 `ArticleSession::resume_reading`。Clippy、509 個 lib／Slint 測試及 article input、paste、reply navigation、product shell 探針通過；未在實站與已安裝 App 上操作。
+
+## 2026-11-18 Slint 發佈流程與 GPL 授權
+
+使用者決定 PTTStella 改以 GPL-3.0-or-later 授權，並把 `Desktop Release` 改為打包 Slint 版：macOS 內附 Homebrew libmpv 閉包，Windows 使用固定雜湊的 mpv 官方 LGPL DLL 與 app-local Visual C++ runtime、Setup 沿用原 AppId 且不需 WebView2，Linux 依賴系統 libmpv2；各平台另發佈 `-sources.tar`。verify run 44310874774 在四架構通過並產出完整下載集；安裝、升級、回退與實際啟動仍待各平台驗收，細節見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)。
+
+## 2026-11-18 Slint 成為桌面入口
+
+依使用者決定，`dioxus` 分支保存最後的 Dioxus 開發線，`develop` 改以 Slint 版為主：`pttstella` 啟動 Slint，資料與密碼庫沿用正式 PTTStella，Dioxus 暫留為 `pttstella-dioxus`。`main` 維持 `0.4.1`，正式發佈須先完成 Slint 打包與 libmpv 原始碼交付，見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)與 [Slint 計畫](../slint-evaluation-plan.md#2026-11-18-s9-入口切換)。
+
+## 2026-11-18 Slint 游標即時更新
+
+Slint 在派送滑鼠事件時先讀游標、後執行 Rust 命中，導致手形與導覽游標慢一個移動。命中種類改變後，終端與文章畫面在原位置補一次被忽略的移動，只用來套用游標。macOS arm64 封裝版經使用者實測：首次滑入連結／文章列、靜止時鍵盤換頁與開文章後移動，游標都立即正確。其他平台尚待重新封裝驗證。
+
 ## 2026-11-06 文章自動開圖
 
 「圖片與媒體」的自動開圖預設關閉，沿用設定自動儲存與多開欄位合併。網頁模式以已確認繪製的文章投影啟動同一行內開圖批次，正文和推文依序下載、同網址去重。關閉開關、離開文章或切換模式會撤銷自動批次。macOS 原生 WebView 的合成文章測試以本機 HTTP 核對網頁關閉時零請求、網頁開啟時正文和推文各一次、終端機開啟時零請求。
@@ -1085,6 +1105,8 @@ macOS 原生 Dioxus／WKWebView 的自製文章列表、推文與重啟三個程
 證據在 `.local/verification/account-policies/validation.json`，離線為 `checks`／`checks-finish`，原生為 `account_articles-r2`／`account_lists`／`reload`。第一輪文章探針在工具／複製操作期間送出非預期站端輸入而失敗，保留原報告；重跑完整程序後才計通過。正常 60 GiB 與既有 96 GiB 例外均被其他 namespace 的預留額度擋下；依使用者先前明確允許忽略跨專案額度的授權，本輪 scoped wrapper 採 192 GiB aggregate，保留 100 GiB free floor、16 GiB namespace、鎖與 watchdog，未改全域政策或清理他人快取。原生正文滑鼠／hover 與實站三策略仍由使用者驗收；Windows／Linux UI、單行 PNG 與系統選檔視窗未由本輪補驗。
 
 ## 任意鍵提示的按鍵與點擊繼續（2026-10-20）
+
+2026-11-11 修正鍵盤轉譯。任意鍵提示保留實際字元或原終端控制碼，PTT 文章資訊框可收到第二次大寫 Q。下列為舊版驗收紀錄，現行規則與本機送鍵檢查見 [Vim 瀏覽](../vim-browsing.md)。
 
 使用者要求「請按任意鍵繼續」確實可用任意一般按鍵及滑鼠點擊關閉。沿用原本嚴格 ContinuePrompt 辨識，不解析第二份站端文字。Rust Keyboard 在 Vim 開／關、原生輸入／原生一次中皆把一般按鍵轉為 Continue，再由既有 planner／Connection 送單一空白；f／i／Escape 不在這張提示切換模式，原生一次消耗該次機會，其餘模式保留。Normal 保留 readonly 宿主的實體字母／數字鍵轉譯（含 CJK 來源的 Process／229）；修飾鍵單按、原生輸入的 Dead／Process、真正組字及其確認不送文字；選取 Escape、複製／貼上、本機視窗／縮放快捷鍵保留原本 owner。
 

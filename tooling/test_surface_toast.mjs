@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const context=vm.createContext({});
+vm.runInContext('const SURFACE_TOAST_POLICY = '+readFileSync(new URL('../assets/notification-policy.json',import.meta.url),'utf8')+';',context);
 vm.runInContext(readFileSync(new URL('../assets/surface-toast.js',import.meta.url),'utf8'),context);
 function fixture(reduced=false){
  let time=0,next=0,restored=0;const jobs=new Map(),listeners=new Set(),callbacks=[];

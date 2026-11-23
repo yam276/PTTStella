@@ -47,11 +47,7 @@ impl Change {
 }
 
 pub(super) struct Preferences {
-    store: Result<Store, String>,
-    app: AppSettings,
-    edit_base: AppSettings,
-    display: DisplaySettings,
-    warning: Option<String>,
+    state: pttstella::settings::preferences::Preferences,
     sample: Frame,
 }
 
@@ -64,83 +60,57 @@ impl Preferences {
     }
 
     fn from_store(store: Result<Store, String>) -> Result<Self, String> {
-        let (app, warning) = match store.as_ref().map_err(Clone::clone).and_then(Store::load) {
-            Ok(settings) => (settings, None),
-            Err(error) => (
-                AppSettings::default(),
-                Some(pttstella::msg!(
-                    "settings-load-default",
-                    error = error.to_string()
-                )),
-            ),
-        };
-        let display = app.display.resolve().map_err(|error| error.to_string())?;
         Ok(Self {
-            store,
-            edit_base: app.clone(),
-            app,
-            display,
-            warning,
+            state: pttstella::settings::preferences::Preferences::load(store)?,
             sample: font_sample()?,
         })
     }
-
     pub(super) fn app(&self) -> &AppSettings {
-        &self.app
+        self.state.app()
     }
     pub(super) fn edit_base(&self) -> &AppSettings {
-        &self.edit_base
+        self.state.edit_base()
     }
     pub(super) fn submitted(&mut self, draft: AppSettings) {
-        self.edit_base = draft;
+        self.state.submitted(draft);
     }
     pub(super) fn display(&self) -> &DisplaySettings {
-        &self.display
+        self.state.display()
     }
     pub(super) fn warning(&self) -> Option<&str> {
-        self.warning.as_deref()
+        self.state.warning()
     }
     pub(super) fn hover(&self) -> HoverPosition {
-        self.app.hover
+        self.state.app().hover
     }
-
-    pub(super) fn hover_draft(&self, position: HoverPosition) -> AppSettings {
-        let mut draft = self.app.clone();
-        draft.hover = position;
-        draft
+    pub(super) fn hover_draft(&self, hover: HoverPosition) -> AppSettings {
+        self.state.hover_draft(hover)
     }
-
     pub(super) fn store(&self) -> Result<Store, String> {
-        self.store.clone()
+        self.state.store()
     }
-
-    /// Only a successful owned disk operation may commit an effective draft.
     pub(super) fn commit(&mut self, saved: AppSettings) -> Result<(), String> {
-        let display = saved.display.resolve().map_err(|error| error.to_string())?;
-        self.app = saved;
-        self.display = display;
-        self.warning = None;
-        Ok(())
+        self.state.commit(saved)
     }
 
     pub(super) fn open_packet(&mut self) -> Packet<'static> {
-        self.edit_base = self.app.clone();
+        self.state.open();
         Packet::SettingsOpen(Box::new(SettingsOpen {
-            hover: self.app.hover,
-            article_mode: self.app.article_mode,
-            article_boundary_navigation: self.app.article_boundary_navigation,
-            auto_expand_images: self.app.auto_expand_images,
-            profile: self.app.display.clone(),
-            tools_opacity: self.app.tools_opacity,
-            tools_access: self.app.tools_access,
-            language: self.app.language,
-            values: self.display.clone(),
+            hover: self.state.app().hover,
+            article_mode: self.state.app().article_mode,
+            article_boundary_navigation: self.state.app().article_boundary_navigation,
+            auto_expand_images: self.state.app().auto_expand_images,
+            profile: self.state.app().display.clone(),
+            tools_opacity: self.state.app().tools_opacity,
+            tools_access: self.state.app().tools_access,
+            language: self.state.app().language,
+            values: self.state.display().clone(),
             defaults: DisplaySettings::default(),
             default_profile: DisplayProfile::default(),
             platform: DisplaySettings::platform_default(),
             presets: DisplaySettings::presets(),
-            warning: self.warning.clone(),
-            sample: sample_packet(&self.sample, &self.display),
+            warning: self.state.warning().map(str::to_owned),
+            sample: sample_packet(&self.sample, self.state.display()),
         }))
     }
 

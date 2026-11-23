@@ -61,13 +61,32 @@ def download_bootstrapper(path):
         raise
 
 
-def build(package, staging, version):
-    from release import parse_version
-    parse_version(version)
+def pinned_compiler():
     iscc = compiler()
     config = json.loads((ROOT/'tooling/windows/installer-tools.json').read_text(encoding='utf-8'))
     if run(str(iscc), '--version').strip() != config['version']:
         raise RuntimeError('Use the pinned Inno Setup '+config['version']+' compiler')
+    return iscc, 'Inno Setup '+config['version']
+
+
+def compile_setup(iscc, package, staging, version, name, script, *defines):
+    output = staging/'setup'
+    output.mkdir()
+    run(str(iscc), '/Qp', '/DAppVersion='+version,
+        '/DNumericVersion='+version.split('-', 1)[0], '/DPackageDir='+str(package),
+        '/DOutputDir='+str(output), '/DOutputName='+name, *defines,
+        str(ROOT/'tooling/windows'/script))
+    setup = output/(name+'.exe')
+    if not setup.is_file():
+        raise RuntimeError('Inno Setup did not produce the installer')
+    from bundle_windows import inspect_pe
+    return setup, inspect_pe(setup)
+
+
+def build(package, staging, version):
+    from release import parse_version
+    parse_version(version)
+    iscc, compiler_name = pinned_compiler()
     bootstrapper = staging/'MicrosoftEdgeWebview2Setup.exe'
     download_bootstrapper(bootstrapper)
     signature = json.loads(run('powershell.exe', '-NoProfile', '-NonInteractive',
@@ -78,22 +97,39 @@ def build(package, staging, version):
             or signature.get('sha256') != actual):
         raise RuntimeError('WebView2 bootstrapper signature/hash verification failed')
     name = f'PTTStella-{version}-windows-x64-setup'
-    output = staging/'setup'
-    output.mkdir()
-    run(str(iscc), '/Qp', '/DAppVersion='+version,
-        '/DNumericVersion='+version.split('-', 1)[0], '/DPackageDir='+str(package),
-        '/DOutputDir='+str(output), '/DOutputName='+name,
-        '/DBootstrapperPath='+str(bootstrapper), '/DBootstrapperSHA256='+actual,
-        str(ROOT/'tooling/windows/pttstella.iss'))
-    setup = output/(name+'.exe')
-    if not setup.is_file():
-        raise RuntimeError('Inno Setup did not produce the installer')
-    # Inno Setup is explicitly configured for x64 GUI output.
-    from bundle_windows import inspect_pe
-    pe = inspect_pe(setup)
-    return setup, {'compiler': 'Inno Setup '+config['version'],
+    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella-dioxus.iss',
+                              '/DBootstrapperPath='+str(bootstrapper), '/DBootstrapperSHA256='+actual)
+    return setup, {'compiler': compiler_name,
                    'pe': pe,
                    'webview2': {'mode': 'evergreen_bootstrapper', 'url': BOOTSTRAPPER_URL,
                                'bootstrapper': signature, 'install_only_if_missing': True,
                                'internet_required_when_missing': True},
+                   'scope': 'current_user', 'runtime_installation_acceptance': 'not_run'}
+
+
+def build_slint(package, staging, version):
+    """Product Setup for the Slint entry: same AppId and folder, no WebView2 prerequisite."""
+    from release import parse_version
+    parse_version(version)
+    iscc, compiler_name = pinned_compiler()
+    name = f'PTTStella-{version}-windows-x64-setup'
+    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella.iss')
+    if any(any(part in dll for part in ('webview', 'webkit', 'wry')) for dll in pe['imports']):
+        raise ValueError('Unexpected WebView dependency in Setup')
+    return setup, {'compiler': compiler_name, 'pe': pe, 'app_id': 'io.github.yam276.pttstella',
+                   'scope': 'current_user', 'webview2': 'not_required',
+                   'runtime_installation_acceptance': 'not_run'}
+
+
+def build_slint_candidate(package, staging, version):
+    from release import parse_version
+    parse_version(version)
+    iscc, compiler_name = pinned_compiler()
+    name = f'PTTStella-Slint-Candidate-{version}-windows-x64-setup'
+    icon = ROOT/'assets/icons/pttstella.ico'
+    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella-slint.iss',
+                              '/DSetupIcon='+str(icon))
+    if any(any(part in dll for part in ('webview', 'webkit', 'wry')) for dll in pe['imports']):
+        raise ValueError('Unexpected WebView dependency in Slint Setup')
+    return setup, {'compiler': compiler_name, 'pe': pe,
                    'scope': 'current_user', 'runtime_installation_acceptance': 'not_run'}

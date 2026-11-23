@@ -1,0 +1,77 @@
+import { PanelButton, PanelCombo, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
+
+export global SitesState {
+    in-out property <[string]> labels;
+    in-out property <[string]> favourites;
+    in-out property <string> default-note;
+    in-out property <string> current-note;
+    in-out property <string> message;
+    in-out property <string> security;
+    in-out property <bool> writable;
+    in-out property <bool> busy;
+    in-out property <bool> composing;
+    in-out property <int> choice;
+    in-out property <string> name;
+    in-out property <string> address;
+    in-out property <int> encoding;
+    in-out property <bool> encoding-focused;
+    callback choose(int);
+    callback preset(bool);
+    callback action(int);
+    callback close-sites;
+    callback field-edit(int,string)->string;
+    in-out property <int> focus-address-sequence;
+    public function focus-address() { root.focus-address-sequence += 1; }
+}
+
+export component SitesPanel inherits PanelOverlay {
+    heading: SitesState.labels[0];
+    heading-icon: LucideIcons.globe;
+    panel-width: 800px; panel-height: 650px;
+    private property <int> focus-address-sequence: SitesState.focus-address-sequence;
+    changed focus-address-sequence => { if root.visible { address-field.focus(); } }
+    keys:=FocusScope {
+      width: root.content-width; height: root.content-height;
+      key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
+      PanelScrollView {
+          width: keys.width;
+          height: keys.height;
+          content-width: self.visible-width;
+      VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
+        Text {text:SitesState.labels[14];color:#c7d4e7;wrap:word-wrap;}
+        Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
+        Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}
+        Text {text:SitesState.labels[1];color:#c7d4e7;}
+        PanelCombo {model:SitesState.favourites;current-index<=>SitesState.choice;enabled:root.visible && !SitesState.busy && !SitesState.composing;selected=>{SitesState.choose(self.current-index);} }
+        HorizontalLayout {
+            alignment: start; spacing: 8px;
+            PanelButton {text:SitesState.labels[10];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(false);} }
+            PanelButton {text:SitesState.labels[11];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(true);} }
+        }
+        Text {text:SitesState.labels[3];color:#c7d4e7;}
+        name-field:=PanelField {text<=>SitesState.name;accessible-label:SitesState.labels[3];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(0,self.text);} }
+        Text {text:SitesState.labels[4];color:#c7d4e7;}
+        address-field:=PanelField {text<=>SitesState.address;accessible-label:SitesState.labels[4];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(1,self.text);} }
+        Text {text:SitesState.labels[5];color:#c7d4e7;}
+        encoding-choice := PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:root.visible && !SitesState.busy && !SitesState.composing;}
+        Text {text:SitesState.security;color:#9ab5ce;wrap:word-wrap;}
+        HorizontalLayout {
+            alignment: start; spacing: 8px;
+            PanelButton {text:SitesState.labels[6];icon:LucideIcons.star;enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(0);} }
+            PanelButton {text:SitesState.labels[7];icon:LucideIcons.trash-2;enabled:SitesState.writable && SitesState.choice>0 && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(1);} }
+            PanelButton {text:SitesState.labels[8];icon:LucideIcons.save;enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(2);} }
+        }
+        Text {text:SitesState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+        HorizontalLayout {
+            alignment: end; spacing: 8px;
+            PanelButton {text:SitesState.labels[13];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(4);} }
+            if !root.embedded: PanelButton {text:SitesState.labels[12];icon:LucideIcons.x;enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
+            PanelButton {text:SitesState.labels[9];icon:LucideIcons.plug;primary:true;enabled:!SitesState.busy && !SitesState.composing && SitesState.address!="";clicked=>{SitesState.action(3);} }
+        }
+      }
+      }
+    }
+    private property <bool> encoding-focused: root.visible && encoding-choice.has-focus;
+    changed encoding-focused => { if root.visible { SitesState.encoding-focused = self.encoding-focused; } }
+}

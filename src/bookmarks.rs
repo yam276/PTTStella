@@ -3,8 +3,10 @@ use crate::article_target::ArticleTarget;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub mod archive;
+#[cfg(feature = "desktop-services")]
+pub mod session;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod store;
 
 pub const LIMIT: usize = 500;

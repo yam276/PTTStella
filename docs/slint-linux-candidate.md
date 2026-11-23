@@ -1,0 +1,222 @@
+# Slint Linux x64 候選包
+
+## 2026-11-13 118a1d9 候選
+
+deb／tar.gz 在 `.local/verification/slint-edge-fetch/linux/`。兩包共用 AMD64 主程式 SHA-256 為 `386bad851a60548763ae4c66ff15f1db638bc3f60f15c76dad15fd2d0e8530bd`。同一出貨執行檔在隔離 QEMU／Xvfb 通過取消後的手動翻頁、837 行全文、4,181 行分段及逾時四案，每案一次 Close ACK。 另以 XTest 實際點取消、按 End、連按兩次 Page Down 和點繼續。暫停後由 67 行增至 89 行，畫面自動捲到新內容，仍顯示已取消全文載入，重開預載後精確收完 19 筆取頁。實機、Wayland 與硬體 GPU 依指示待驗。
+
+## 2026-11-13 cbe9426 候選
+
+deb／tar.gz 在 `.local/verification/slint-segment-navigation/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `0cbe6deccbcf5729dc56c38318194e1d260617d56f25bac3db1803003c487e1a`，與分段、837 行長文、取消／繼續三案以及實際 X11 End／滾輪案例逐位元相同。4,181 行的分段案例核對第 4,049 行重疊、189 筆取頁與唯一 Close ACK。實機、Wayland 與硬體 GPU 依安排待驗。
+
+## 2026-11-13 299a0b3 候選
+
+deb／tar.gz 在 `.local/verification/slint-login-panel-candidate/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `a99dabc96effb1dcfd069b2ef24c10193d3120d924294ae84cb14fe8e5152fff`，和隔離 X11 的登入驗收執行檔逐位元相同。獨立面板通過合成站的帳密、錯誤驗證碼與救援碼。設定內嵌表單在非登入畫面正確拒送，縮窗後仍可操作。實機、Wayland 與硬體 GPU 待驗。[登入紀錄](login.md#操作)
+
+從交付 tar.gz 解出的程式在隔離 QEMU／Xvfb 跑完 14 案，每案一次 Close ACK。涵蓋草稿保存重開與帶回、文章及終端搜尋、長文 37 次取頁、取消續跑、文章輸出、設定搜尋 48 個定位、推文、收藏，以及 MP4／WebM／OGV 的軟體繪圖和播放器回收。收據在同目錄下的 `linux-components/summary.json`。
+
+## 2026-11-13 3277ac1 候選
+
+deb／tar.gz 在 `.local/verification/slint-video-toggle/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `27e4e76b91e4354ef6ed970eb1139e781eadfb2b87eb409d668b16d11dea6dcc`。從乾淨 `3277ac1` 重建的 ELF 與元件測試的 ELF 逐位元相同。隔離 X11 通過 MP4 緩衝中暫停與繼續，三種影片各通過片尾重播和播放器退場，均收到一次 Close ACK。實機、Wayland 與硬體 GPU 待驗。
+
+從交付 tar.gz 解出的執行檔再跑 14 項元件回歸，全部正常退出且各收到唯一 Close ACK。核對草稿保存、跨程序讀回及帶回站端，837 行長文的 37 次取頁、441 行的 19 次取消續跑、文章與終端搜尋、45 行輸出、設定 48 個中英文定位、推文追加、收藏、主視窗及三種影片。驗收採 QEMU x64／Xvfb／軟體繪圖，收據在同一目錄的 `linux-components/summary.json`。
+
+## 2026-11-13 2ef65ce 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `33f36d0562188f10fd266deb12fa11d0ebdfc0e440cd8e3a2ee4e83bccfec1c4`，tar.gz 為 `7f0bd6909b5b1b0cae9fb1779e97b67dfaf72cd9dbd7e3558046279f36fcb215`。
+
+用便攜包內 ELF 在 QEMU／X11 下以 XTest 操作 1,000×690 視窗，選取 GBK 與 Big5-UAO 並各點擊一次「連線切換」。同一 TCP 位址的三次連線均依序關閉，站端收到零輸入 bytes，程序 exit 0。收據在 `native-x11-result.json`。Linux x64 實機待驗。
+
+同包在 QEMU／Xvfb 完整重跑 14 項軟體繪圖元件測試，每案各一次 Close ACK。涵蓋草稿保存與重開、主視窗、文章及終端搜尋、長文與取消續跑、文章輸出、設定搜尋、推文更新、收藏及 MP4／WebM／OGV。首輪在 11 案後遇到 Podman EOF，保留 `linux-components-first.log`，重跑收據在 `linux-components/summary.json`。兩輪客體暫存已清理，容器及虛擬機已停止。
+
+以同一便攜包執行檔在隔離 X11 用滑鼠右鍵開啟文章選單，點「更新推文」啟用，完成兩輪追加後顯示新增 6 則。重開選單可見勾選，保持開啟 5.4 秒沒有下一輪站端請求。再點同一列取消，勾選消失。按 Esc 回到文章，後續 5.4 秒沒有再送請求。站端核對全部 19 個取頁及刷新步驟並收到唯一 Close ACK，程序 exit 0。
+
+首輪校準只開啟選單，關閉時站端仍等待啟用指令。另一次在首次刷新進行中嘗試重開選單，未取得有效的已勾選畫面，該輪停止於站端第 8 步。保留校準和中斷日誌。有效結果、前後截圖及客體暫存清理位於 `.local/verification/slint-x11-interactions/`。本輪使用 QEMU／Xvfb／Openbox 與軟體繪圖，Linux 實機與 Wayland 待驗。
+
+### 浮球與設定的 X11 操作
+
+同一便攜包以 XTest 點開右側浮球，看到五個分類，再用 End／Enter 開啟主視窗內的設定。輸入 `privacy` 並點搜尋結果可開啟帳號與隱私。圖片與媒體的文章模式下拉選單可用 Esc 先收合，重新展開後選取「終端機」。關閉再開啟設定，畫面讀回「終端機」，關窗收據也讀回存檔中的 `article_mode: terminal`。
+
+把浮球拖到左側後，扇形改向視窗內展開。進入導覽後用左方向鍵回扇形，再按 Esc 收合。視窗縮成 840×560 後，浮球保持左側停靠，仍可展開及收合。站端只收到 Close 並回覆，程式正常退出，設定儲存沒有留下待處理工作或子視窗。畫面、日誌與清理收據在 `.local/verification/slint-x11-tools-settings/`。
+
+校準輪在導覽子選單按 Esc 時已收合整個浮球，再按一次 Esc 後合成站回報收到額外輸入。當輪未記錄該筆內容。正式重跑以左方向鍵返回扇形，Esc 關閉。QEMU 下的畫面和鍵鼠結果保留為 X11 證據，Linux 實機、Wayland、無障礙焦點與動畫時序待驗。
+
+### MP4 控制與關窗的 X11 操作
+
+用 `2ef65ce` Linux x64 便攜包在 QEMU／Xvfb／Openbox 的軟體繪圖環境測試。第一輪由既有探針準備尚未播放的 MP4，再用 XTest 點擊播放、暫停、調整音量與切換靜音。畫面從 10% 調到 32%，解除靜音後維持 32%。暫停時點時間軸跳到顯示的第 2 秒，四色畫面中的白色標記隨之移動。縮窗至 840×650 後仍能播放。
+
+第二輪從終端畫面以滑鼠點本機 MP4 連結，播放器等待手動開始。第一次播放完成後用「關閉」返回終端，同一連結可再次開啟及播放。第二次播放中以視窗管理器關閉主視窗。兩次播放器都銷毀 core、收回 renderer 並等待控制及資料流工作結束，每次各下載一次完整 18,236 bytes。兩輪程式均正常退出並收到唯一站端 Close ACK。畫面、關窗收據與清理路徑在 `.local/verification/slint-x11-video/` 和其 `link/` 子目錄。
+
+同包另從終端點開 WebM 與 OGV，分別以滑鼠播放、暫停、將音量從 10% 調到 35%、靜音與解除。兩種格式解除靜音後均保留 35%，時間軸跳到畫面顯示的第 2 秒，四色影格中的白色標記隨之移動。視窗縮至 840×650 後繼續播放，再由視窗管理器關閉。每案收到唯一 Close ACK，軟體 renderer、播放器 core 與 HTTP 工作均退出，各下載一次完整素材。首輪 WebM 完成後，彙整程式誤讀 HTTP 收據的欄位，保留原始紀錄並更正解析後補跑 OGV。畫面、結果及兩輪清理收據在 `.local/verification/slint-x11-video/formats/`。
+
+X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU 路徑待驗。
+
+### 三種影片的 Linux 數位音訊輸出
+
+用同一 `2ef65ce` Linux x64 便攜包，在隔離 X11 從終端點開 MP4、WebM 和 OGV。三種素材都含自製 440 Hz 測試音。每案使用專用 PulseAudio 虛擬輸出和 48 kHz 浮點取樣，從畫面將音量由 35% 調到 69%，再切換靜音與解除。各格式都錄到 440 Hz，調高後的 RMS 為調高前的 7.65–7.67 倍。靜音取樣全為零，解除後回到調高時的訊號強度，差異小於 0.2%。
+
+關閉播放器後，每案的 PulseAudio 輸入串流都消失。關窗時播放器、renderer 與 HTTP 工作正常退出，站端各收到一次 Close ACK，每部影片下載一次。校準時修正了虛擬伺服器的模組路徑。早期以 16 位元輸出測預設 10% 時，素材的低振幅量化為零。正式量測使用浮點輸出並選用 35% 和 69%，早期收據保留。結果、原始取樣與清理記錄在 `.local/verification/slint-x11-video/audio/`。實體喇叭及其他平台的原生音訊待驗。
+
+### OpenGL 在 Linux 模擬環境的結果
+
+同一 `2ef65ce` 便攜包以 OpenGL、QEMU x64 與 Mesa softpipe 開啟三種影片。視窗擷取未見預期四色畫面。各格式的下載、播放器退場及 Close ACK 通過。另以既有像素探針重跑，三案都解碼到約第 3 秒並到達片尾，探針未取得播放中的像素。接上專用 PulseAudio 虛擬輸出後，三案皆回報一個音訊聲道，仍在同一播放檢查失敗。固定視窗的另一次 MP4 點擊未開始下載，該輪只保留作控制校準。
+
+改用 Mesa llvmpipe 執行 MP4 時，預設 QEMU CPU 與 `QEMU_CPU=max` 都在 LLVM 產生程式碼時中止，未收到 Close ACK。此組 OpenGL 模擬驗收仍失敗，實體 GPU 待驗。收據、畫面和各輪暫存清理在 `.local/verification/slint-x11-video/opengl/`，以 `acceptance.json` 彙整逐案結果。
+
+### OpenGL 的 30 秒素材重驗
+
+將候選內自製 MP4、WebM、OGV 的 3 秒影音各重複至約 30 秒，沿用原編碼資料與四色預期。在相同 `2ef65ce` 執行檔、QEMU x64、Mesa softpipe 與專用 PulseAudio 環境重跑元件探針，三案皆通過。暫停跳轉後，播放器中介 framebuffer 與視窗 framebuffer 各讀到預期四色，OpenGL 錯誤碼皆為零。音量、靜音、繼續播放與失焦暫停的回覆也通過。各案正常退出，關閉播放器與 HTTP 工作，收到唯一站端 Close ACK。
+
+3 秒素材的失敗仍保留。正式包內的素材版本與程式碼維持原提交。重驗使用合成 toolkit 事件，Linux 實體 GPU、OpenGL 的 X11 滑鼠操作及短片呈現時序待驗。素材來源、雜湊、逐案收據及清理記錄在 `.local/verification/slint-x11-video/opengl/long-fixture/`。
+
+### OpenGL 的原始短片視窗取樣
+
+在相同候選包、Mesa softpipe 與虛擬音訊下，用 X11 點開原始 3 秒 MP4、WebM、OGV。單次早點播放的校準輪沒有開始下載，已排除。後續以隔開的滑鼠點擊與連續視窗取樣，各格式都下載一次完整素材，四個視窗取樣點符合預期四色，最早取到四色約在開啟預覽後 10.9–11.0 秒。各案正常關窗、收到唯一 Close ACK，HTTP 工作均結束。這段時間包含多次點擊和模擬環境的取樣間隔。
+
+首張四色截圖仍顯示 0／0 秒，短片的播放狀態與畫面更新時序仍待釐清。原始素材的完整 OpenGL 控制驗收及實體 GPU 待驗。逐案收據、有效畫面及重複截圖清理在 `.local/verification/slint-x11-video/opengl/short-timing/`。
+
+單次點擊重跑在隔離 X11 開啟預覽約 9.6 秒後按播放。MP4、WebM、OGV 分別在點擊後 5.32、5.52、5.52 秒首次取到四色。每案最後一次取樣約在點擊後 7.6–7.7 秒，四色仍在。點擊前、首次四色及最後一張的控制列皆顯示「播放影片」與 0／0 秒。各案完整下載一次並正常 Close。資料在同一目錄的 `single-click/`，含逐案收據、控制列截圖及重複截圖清理記錄。此輪只在 Linux 虛擬顯示器操作鍵鼠。
+
+延長觀察原 `2ef65ce` 便攜包。3 秒 MP4 到點擊後 8.05 秒仍顯示 0／0 秒，移開滑鼠後約 8.41 秒取到 3／3 秒，縮窗後按鈕回到「播放影片」。30 秒 WebM 對照片在 7.05 秒仍顯示 0／0 秒，8.05 秒已顯示 2／30 秒，之後縮窗再放大讀到 6／30 秒。兩案各下載一次並收到唯一 Close ACK。視窗取樣在 `short-timing/expose/`。
+
+用同一份有暫時計時的診斷執行檔各跑 OpenGL／軟體繪圖。OpenGL 下，播放器背景工作回報已載入後，Slint 主執行緒分別晚 3.503 秒才套用 MP4 狀態、晚 3.313 秒才套用 WebM 狀態。軟體繪圖兩案同一間隔皆約 1 ms。每個格式及路徑各取一輪，執行環境為 QEMU x64／Xvfb。這組資料定位到主執行緒狀態套用的延遲。OpenGL 呼叫、事件排程與各自耗時仍待量測，實體 GPU 也待驗。診斷 patch、畫面、對照表及清理在 `short-timing/` 的 `trace/`、`trace-software/` 和 `trace-comparison.json`。
+
+同環境加入逐幀計時。1000×690 的 MP4 和 WebM 都在一幀仍在繪製時收到已載入狀態。該幀耗時 3.38／3.36 秒，其中 Slint 與 Skia 繪製約 1.72／1.69 秒，libmpv 約 1.12／1.15 秒，影片 blit 約 0.54／0.53 秒，緩衝區交換約 1.4／1.3 ms。兩案均在該幀交換後約 1 ms 套用狀態。
+
+同一診斷執行檔和 MP4 將視窗縮為 640×430，取樣期間的繪製中位數由 3.35 秒降為 1.03 秒，播放器已載入到 UI 套用的間隔由 3.26 秒降為 0.95 秒。縮窗畫面核對四色及「播放中」與 1／3 秒。三輪各完成一次素材下載、播放器清理及 Close ACK。這是 Mesa softpipe 在 QEMU 的逐幀結果，實體 GPU 成本待量測。現行候選在這類環境可用 `--software-renderer` 啟動，或以 `Run-Video-Software.sh` 重跑離線影片。診斷與清理位於 `short-timing/frame-cost/`、`frame-cost-small/` 和 `frame-cost-comparison.json`。
+
+## 2026-11-13 d047e55 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
+
+便攜包的 ELF 在 ARM Podman／QEMU x64／Xvfb 跑完 14 項軟體繪圖元件案例，全數正常退出且各收到一次 Close ACK。涵蓋草稿保存與跨程序重開、主視窗、兩種搜尋、長文與取消續跑、複製／PNG、設定 48 個定位、推文更新、收藏及三種影片格式。收據位於同一驗收目錄的 `linux-components/summary.json`。
+
+## 2026-11-13 96e5159 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-settings-focus-mount/linux/`，與其他三架構同取乾淨 `96e5159`。核對 AMD64 套件資料、主程式、共用內容及 1,111／1,124 檔。deb SHA-256 為 `58fa4c83a242e3c3ef539424b75c80294b91739dcf4b03f2fc4924dea45705af`，tar.gz 為 `2c8c0a17cfbf83853c637d4a587234c6dd20fd72e208256796c13437ed66abd2`。同一修正程式在交付前的 QEMU／Xvfb 設定搜尋回歸通過六輪。此包 Linux 實機待驗。
+
+使用交付便攜包的實際 ELF（SHA-256 `bc92000501a8ec04ed2c767cfb18c9bcfa850f7d52684435f6b12f525020fe6f`）在 ARM Podman／QEMU x64／Xvfb 軟體繪圖跑完 14 案，全部 exit 0 且收到唯一 Close ACK。設定搜尋一輪完成 48 個中英文目標。長文 837 行／37 筆、取消續跑 441 行／19 筆、草稿跨程序重開及帶回、推文追加、收藏、文章搜尋與輸出、主視窗和三格式影片均通過。收據及暫存清理見 `.local/verification/slint-settings-focus-mount/linux-components/` 與 `linux-components-cleanup.json`。實機安裝、Wayland、IME、音訊裝置及效能待驗。
+
+## 2026-11-13 57e000c 候選
+
+Linux deb／tar.gz 位於 `.local/verification/slint-passive-window-candidate/linux/`，與其他三架構同取乾淨 `57e000c`。沿用 Debian bookworm amd64 SDK，核對 3,419 份 SDK 檔案及連結。已核對 AMD64 套件資料、兩包主程式、共用內容與 1,111／1,124 個檔案。deb SHA-256 為 `f8a4764500de5f97b27430b68cf78923928c8757367409978d477052a3bdc045`，tar.gz 為 `e36ff35e186c1f5a6a18eb4158aab3d9d83c039575bf0df1fe0a22d8192010ab`。Linux 實機待驗。
+
+在 ARM Podman 的 QEMU x64、Xvfb 與軟體繪圖執行原便攜包，ELF SHA-256 為 `0baa77bbfcf59d05c4a42267a459faeb66f636244a3059008d714107cf95d86b`。草稿保存／跨程序重開、主視窗、兩種閱讀模式搜尋、長文／取消續跑、文章輸出、推文追加、收藏及三格式影片共 13 項首輪成立。收藏的初步彙整誤要求通用 `status` 欄位，後續依實際格式核對 45 列、雙色樣式、儲存／恢復、關閉與 worker join。設定搜尋首輪未能聚焦繁中防閒置欄位，重跑同一 ELF 後通過中英文 48 項。曾有一次 Podman 斷線中止重測，未取得該輪結果，已清理部分提取檔。14 項有效結果皆有唯一 Close ACK。首輪資料、重測及彙整在 `.local/verification/slint-passive-window-candidate/` 下的 `linux-components/`、`linux-settings-followup/` 與 `linux-components-validated.json`。原生 X11／Wayland、IME、音訊裝置及效能待實機驗收。
+
+## 2026-11-13 草稿工具列候選
+
+保留 `.local/verification/slint-draft-history/linux/` 的 deb 作版本對照。與其餘架構同取乾淨 `b57eae8`。當時通過 AMD64 套件資料、主程式、共用內容與 1,110／1,123 個檔案核對。deb SHA-256 為 `5f637bfdc7c92d7c86d3a446818f36e95a89526c84fe27ce9337d200918cee53`，後續候選備妥後移除本版 tar.gz。
+
+## 2026-11-13 草稿與文章被動驗收候選
+
+Linux deb／tar.gz 位於 `.local/verification/slint-passive-drafts-reading/linux/`。從僅比 `675b150` 多三份文件變更的乾淨 `4f95094` 交叉建置，沿用既有 Debian bookworm amd64 SDK 並核對 3,419 份檔案與連結。核對 AMD64 套件資料、deb 的 1,110 份檔案、tar.gz 的 1,123 份檔案，以及兩包的主程式與共用內容。deb SHA-256 為 `e5d398e97c590957ea5b00847ab971d7bfa81836b252b1f0bcd60db20ef2eb2a`，tar.gz 為 `05027cff204c0a090d0f880c51e54faf92a9684db792fd30ecc9e6f6d770f168`。Linux 實機驗收待補。
+
+## 2026-11-13 文章逐行對齊候選
+
+Linux x64 deb／tar.gz 在 `.local/verification/slint-article-arrow-alignment/linux/`。從僅有文件差異的 `04191e1` 交叉建置，產品程式對應 `9376627`。AMD64 deb 的 1,110 份檔案及 tar.gz 的 1,123 份檔案已核對，兩包主程式、共用授權與說明一致。deb SHA-256 為 `eea7c26230cc73654daff43cb717dd0fd66e6273efebb7ae72227323ed4e4314`，tar.gz 為 `59bfad2fdacebfeb5c780a17a7ccbfd7dac3fb150ec52a3ac8a24f9ab4aec47b`。此版原生驗收待補。
+
+## 2026-11-13 收藏載入焦點修正候選
+
+Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-bookmark-load/linux/`。與 `4d7d174` 只差三份文件的乾淨 `ebc1035` 工作樹用固定 Cargo target 及既有 Debian bookworm amd64 SDK 建置，逐一核對 3,419 個 SDK 檔案與連結。AMD64 deb 的 1,110 個檔案與便攜包的 1,123 個檔案已核對。兩包主程式、共用授權與說明一致。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Linux x64 deb | `bb267c421c3b86ad3d0792a20cbf9ec9a581efbff44436b6fccab315ff8d5f25` |
+| Linux x64 tar.gz | `32a905a7ee823abd0ea497be51038803c8f2e5484722469eb823822a9e13e315` |
+
+QEMU／Xvfb 軟體繪圖執行草稿保存、草稿重開、主視窗、收藏和 MP4／WebM／OGV，共七案通過及收到嚴格 Close。收藏的首次呼叫在參數檢查退出，改用既有媒體探針入口後驗證保存與 worker 退出。這輪收據與清理路徑在 `slint-cross-bookmark-load/`。實機安裝、Wayland、原生 IME、聲音和效能待驗。
+
+## 2026-11-12 草稿組字修正候選
+
+Linux x64 deb／tar.gz 位於 `.local/verification/slint-cross-ime-edge/linux/`。乾淨 `06487df` 與 Apple Silicon／Windows x64 候選 `4e28e82` 之間只有文件變更。沿用既有 Cargo target、Apple Clang／ELF LLD 及 Debian bookworm amd64 SDK，重新核對 SDK 的 3,419 個檔案與連結。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Linux x64 deb | `35f4fcb134981c0cae8dab5d68ae4c0b855fc82585a1f8f5328d324a45134a81` |
+| Linux x64 tar.gz | `e998093b491565c511ab4da667f69662dc3b63ee0ad249bbb2953e85f2209fa3` |
+
+AMD64 deb 的 1,110 個檔案及 portable 的 1,123 個檔案已核對，共用主程式 SHA-256 為 `e098b75611f635335c2065bc76c34c41446fbfcc83c0d66541bd201017c55ec0`。從 portable 在 QEMU／Xvfb 的軟體繪圖環境完成草稿、重開並帶回站端、主視窗及 MP4／WebM／OGV 六案，全部正常退出並收到嚴格 Close。影片核對音量、靜音回覆和資源退場。這輪涵蓋 deb metadata 及 portable 執行，實機安裝、Wayland、原生 IME、聲音和效能待驗。
+
+## 2026-11-12 含原生影片控制的候選
+
+這輪 Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-audio-current/linux/`。以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 在 macOS arm64 上交叉編譯，使用 Rust 1.97.0、Apple Clang、Rust 工具鏈的 ELF LLD 與既有 Debian bookworm amd64 sysroot。SDK 的 3,419 個檔案及連結均核對。ELF SHA-256 為 `e801538bb86ebc4fd3211ba196877e26707ea02e49ab906377a25029a9654fe8`。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb` | `88a765e3b3fe96d8e2042c340747587076a29122fed6d13ce8fb4c5bbcd22e15` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz` | `bd5960a8b00fe6a879502df6308d3c9719eab74e41c9baa1df519a5f10e68c07` |
+
+在既有 ARM Podman 容器以 x64 loader 解析依賴，`dpkg-shlibdeps` 取得 Depends。未發現 WebView／WebKit 的載入依賴。逐檔核對 deb 1,110 項及 tar 1,123 項，兩包共用的執行檔、授權和 README 一致。以 QEMU／Xvfb 的軟體繪圖執行 portable 包的 MP4、WebM、OGV，三案均 exit 0，取得音量／靜音回覆、播放器退場與嚴格 Close。這次驗收涵蓋 deb metadata 和 portable 執行。Linux x64 實機、Wayland、原生 IME、實際聲音、乾淨安裝及效能待驗。
+
+## 2026-11-11 候選
+
+2026-11-11 候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`。ELF `68601365…` 以乾淨 `ff0ae84` 交叉編譯，含文章焦點與固定狀態列探針修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 個 payload 均已核對。deb 重裝與免安裝包的軟體繪圖完整視窗檢查通過，預設繪圖在 QEMU 下仍遇到通知時序失敗。安裝執行檔也通過 X11 背景零取頁與取得焦點後 37 次取頁的案例。[本輪封裝驗收](slint-evaluation-plan.md#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)
+
+較早的 `af476061` ELF 通過 20 項合成案例，包含兩項針對性重測。歷史結果見[文章焦點同步](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。QEMU 結果的執行環境為 Xvfb／Openbox，實機、Wayland、原生 IME、音訊和效能待驗。[來源還原](slint-product-source.md)選 `shell-layout-cross-current`。
+
+此為 S8 內部驗收候選，尚未取代正式 Dioxus 入口。目標為 Ubuntu 24.04 x64，提供獨立名稱的 deb 與 portable tar.gz，包含 `native-player-probe` 主程式。尚未通過 Linux 原生桌面、繁中 IME、DPI、音訊、硬體 GPU、資料回退與效能驗收。
+
+## 先前候選與來源
+
+當時檔案位於 Slint worktree 的 `.local/verification/slint-linux-candidate/package-current/`：
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz` | `73d88928b3d83d48e68f2f3ac76ea9c3b488b7e459407a926ffdfbf57ffc8fa5` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb` | `8e34ac7547eaee9a9ed55547ae7bf2df783a6c1517fa7435219c23d07920e334` |
+
+執行檔 SHA-256 為 `9b68eb81ed5348f4dd44f3e05ab5a1a8284a89b884a7240f6c6df22bd7c6d5f7`，91,524,232 bytes。Rust 來源為 `6d70196` 加同批 `slint-find-pause/fixed-source.patch`，僅補診斷及修正搜尋探針先決條件，生產搜尋／失焦保護未改。建置來源、環境及 binary hash 在 `slint-find-pause/fixed-build.json`；其他打包來源狀態另記在證據。來源 commit 不是完整第三方來源交付，`source_delivery` 仍為 `not_ready`。
+
+使用 macOS arm64 的 Rust 1.97.0／Clang／Rust LLD 交叉編譯 Linux GNU x64，連結經逐檔 hash 核對的 Debian x64 sysroot；保持既有 release 最佳化，不使用主機 libmpv。ELF、`libmpv.so.2`、target loader 的實際相依解析及 release all-target Clippy 已核對。先前嘗試在 2GiB ARM VM 內以原生 ARM rustc 交叉編譯，最後的主程式 rustc 被 OOM kill；x64 rustc 的 QEMU 試跑亦未成功。這些不是 native Linux x64 編譯通過證據。本輪確切命令、來源、套件版本及 Clippy 見 `slint-find-pause/fixed-build.json`、`clippy-exit.json` 與 `sysroot-inventory.json`；先前建置失敗仍保留於 `slint-linux-candidate/oom-inspection.json` 等紀錄。
+
+## 在 Linux 驗收
+
+先在交付目錄核對校驗檔：
+
+```sh
+sha256sum -c PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.sha256
+sudo apt install ./PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb
+pttstella-slint-candidate --show-profile
+tar -xzf PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz
+```
+
+deb 使用獨立套件、執行檔及桌面 ID；`--show-profile` 只顯示研究用設定／資料與密碼庫 scope，不讀寫 store。一般執行檔或桌面入口會連研究設定的預設站，初始為 PTT WSS，不自動登入。要先離線試操作，進入解壓後的可寫目錄執行 `./Run-Offline.sh`，只連本機合成服務。
+
+| Portable 入口 | 驗收內容 |
+| --- | --- |
+| `Run-Grid.sh`、`Run-Grid-Software.sh` | 80×24、雙色字、末行、縮放與全螢幕 |
+| `Run-IME.sh` | 實際繁中輸入法候選窗、取消／選字及一次提交；需要人工操作 |
+| `Run-Reading.sh` | 合成文章閱讀、尋找與捲動 |
+| `Run-Drafts.sh` | 草稿輸入與重開；合成草稿明示保存於 `evidence/drafts` |
+| `Run-Video.sh`、`Run-Video-Software.sh` | 自製四色 MP4、播放／暫停、音量／靜音、拖曳與關閉 |
+| `Check-Shell.sh`、`Check-Shell-Software.sh` | 自動執行 toolkit shell 案例後關窗，不證明原生輸入 |
+| `Show-Profile.sh` | 顯示隔離路徑 |
+
+每次 launcher 建立新的 `evidence/run.XXXXXX` 並保留 log；診斷環境變數會清除，保留正常的 IME 環境。診斷 launcher／影片 fixture 在 tar.gz；deb 只安裝主程式、桌面入口、說明及授權。tar.gz 不內附系統函式庫，需有 `package-report.json` 的 `runtime.depends` 所列套件。Winit／xkbcommon 使用 dlopen，不能只靠 ELF `DT_NEEDED` 推導；因此明列 X11／Wayland／GL runtime，包含 `libxkbcommon-x11-0`，不要求安裝開發 SDK。
+
+## 已驗證範圍與待辦
+
+第一版包僅由 `dpkg-shlibdeps` 推導相依，在 fresh Ubuntu 24.04 容器安裝後缺少 late-loaded xkbcommon-x11，GUI 失敗。已修正 Depends，以同一 ELF 重新打包；第一版完整包刪除，保留 hash／manifest 與失敗證據。
+
+修正包實際安裝於 fresh Ubuntu 24.04 amd64 容器，以 QEMU／Xvfb software 執行；安裝 shell、含空格路徑的 portable shell、MP4／WebM／OGV 及草稿共六案 exit0，嚴格本機 peer 均收到 Close ACK。三格式影片核對像素及 session／render owner 清理。安裝清單沒有 WebKit／JavaScriptCore。Debian 的 software shell 與三格式影片另有分立結果。這些是套件安裝與模擬環境的 component 證據，不證明實體 Linux 視窗、X11／Wayland 原生操作、IME、聲音、GPU 或效能。
+
+先前文章搜尋報 `background ran a pending query`。新增分階段診斷後確認：Ubuntu文章案例在送出測試編輯前已 `foreground=false`、`find_blocked=true`、輸入欄失焦；編輯被正確拒絕，draft仍無、timer未啟動、版本4及三筆舊命中完全不變。這份結果不能證明產品在背景重新搜尋，先前的產品失敗解讀撤回；獨特反例與來源／binary hash仍保留。
+
+探針現先建立可接受編輯的synthetic toolkit foreground／field focus，立即確認已保留draft並清空舊命中，再停用，確認blocked／零命中／draft保留，最後恢復並完成搜尋。生產 `find_edit`、debounce與失焦保護完全未改。Debian與Ubuntu文章／終端模式共六案（含Ubuntu重跑）通過，逐案驗證receipt與Close ACK；新包重新安裝到原本的Ubuntu runtime root，Depends逐字不變，shell／relocated launcher／三格式影片／兩種尋找／草稿八案通過。這一輪是reinstall回歸，沒有冒充另一個fresh clean install。命令、診斷前後值、source patch、各binary hash及receipt見 `slint-find-pause/` 的 `ubuntu-diagnostic-results.json`、`ubuntu-fixed-results.json`、`package-acceptance.json` 與 `package-evidence/ubuntu-execution.json`；最初的失敗仍在舊批證據中。
+
+以上搜尋只使用toolkit text／synthetic activation；未宣稱OS焦點、繁中IME或原生背景操作完成。八案中的草稿也未驗證新程序讀回，影片未證明聲音可聽；各receipt保留實際scope。
+
+封裝以 `tooling/bundle_slint_linux.py` 消費已建 ELF、匹配的 build record、Skia 授權及三格式 CC0 fixture，不自行編譯或啟動 GUI。沿用 `tooling/bundle_release.py` 的 Linux layout／相依處理，既有 Dioxus 預設名稱及流程保留。Windows／Linux 共用 build-record 與 fixture admission。全150個Python測試（包含7個Linux打包案例）、文件、fmt、actionlint及diff gate通過；本輪Linux target release/all-target Clippy亦通過。完整 S8 仍依[總計畫](slint-evaluation-plan.md)驗收。
+
+候選包的 `native_acceptance: not_run`、`source_delivery: not_ready` 與 unsigned 標示保留。建置 target、暫存 sysroot／磁碟映像、解包副本與驗收容器按批次清理；只保留最新包與最小來源／結果／獨特失敗證據，清理不等於產品驗收完成。
+
+## 2026-11-13 cb4fbfc 候選
+
+Linux x64 deb 與 tar.gz 使用 `cb4fbfc` 的產品及封裝程式，在只多文件提交的乾淨 `12c02d8` 建置。核對 amd64、1,111 個 deb 檔案、1,124 個便攜檔案、共用文件與出貨主程式雜湊。主程式與前輪隔離 X11 鍵盤驗收逐位元相同。用 tar.gz 內的執行檔在 QEMU／Xvfb 重跑九案，包括兩種切篇、草稿和重開、設定搜尋、推文更新及三格式影片。九案均正常退出且收到 Close ACK。實機、Wayland、IME、實聽及原生效能仍待驗。交付與收據在 `.local/verification/slint-article-arrow/`。
+
+### cb4fbfc 推文、浮球與設定的 X11 驗收
+
+以 SHA-256 與出貨 tar.gz 完全相同的執行檔，在隔離 QEMU／Xvfb／Openbox 用 XTest 操作。右鍵啟用推文更新，第一輪完成後重開選單，看見金色勾選。選單開啟 5.57 秒沒有新增站端步驟，Esc 關閉後第二輪自動更新。按「新增 6 則推文 · 查看」到第 29–51 行，取消後勾選消失，正文取樣區逐位元不變。取消後再等 5.65 秒無刷新。合成站核對 19 個步驟及唯一 Close ACK。
+
+浮球左右停靠都向內展開五分類，導覽子選單以左方向鍵返回，Esc 收合。縮至 840×560 後仍可展開和收合。從浮球用 End／Enter 開啟同一視窗的設定，鍵入 `privacy` 後點結果到帳號與隱私。Esc 先收下拉選單，再關設定。選擇終端機模式後重開設定可讀回，關窗收據確認保存完成且沒有待處理設定工作。兩個通過的程序均正常退出。
+
+前兩輪在首次刷新進行中打開右鍵選單，觀察到刷新中止並保留閱讀位置。其中一輪在選單未開時送出的 Esc 到了站端，另一輪由控制器提前關窗。兩輪日誌保留。正向流程待首次刷新完成再開選單。畫面、站端及清理收據在 `.local/verification/slint-article-arrow/x11-shell/`。Linux 實機、Wayland、IME 與 macOS／Windows 同包原生操作仍待驗。

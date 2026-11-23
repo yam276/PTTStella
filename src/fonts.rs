@@ -1,5 +1,6 @@
 //! Fixed, application-owned font assets; never resolves arbitrary local paths.
 use dioxus::desktop::wry::http::{Method, Request, Response, StatusCode, header};
+use pttstella::terminal_fonts::{CASCADIA_MONO, NOTO_SANS_CJK_TC};
 use std::borrow::Cow;
 mod catalog;
 pub(crate) use catalog::{Catalog, Source, installed};
@@ -14,14 +15,8 @@ pub fn response(request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
         return response;
     }
     let (bytes, mime): (&'static [u8], &'static str) = match request.uri().path() {
-        "/pttstella-fonts/CascadiaMono.ttf" => (
-            include_bytes!("../assets/fonts/CascadiaMono.ttf"),
-            "font/ttf",
-        ),
-        "/pttstella-fonts/NotoSansCJKtc-Regular.otf" => (
-            include_bytes!("../assets/fonts/NotoSansCJKtc-Regular.otf"),
-            "font/otf",
-        ),
+        "/pttstella-fonts/CascadiaMono.ttf" => (CASCADIA_MONO, "font/ttf"),
+        "/pttstella-fonts/NotoSansCJKtc-Regular.otf" => (NOTO_SANS_CJK_TC, "font/otf"),
         _ => {
             *response.status_mut() = StatusCode::NOT_FOUND;
             return response;

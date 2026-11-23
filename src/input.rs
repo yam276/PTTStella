@@ -48,6 +48,12 @@ pub struct PreparedPaste {
     pub lines: usize,
 }
 
+impl PreparedPaste {
+    pub fn requires_confirmation(&self) -> bool {
+        self.lines > 1 || self.text.contains('\x1b')
+    }
+}
+
 pub fn prepare_paste(text: &str) -> Result<PreparedPaste, InputError> {
     prepare_paste_with(text, encoding::TextEncoding::Uao)
 }

@@ -1,6 +1,8 @@
 //! Synthetic round trip through the production connection owner.
+pub(super) mod drafts;
 pub(super) mod live_updates;
 pub(super) mod round_trip;
+pub use drafts::DraftFailure;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::TcpListener,
@@ -24,6 +26,8 @@ pub(super) enum Scenario {
     BookmarkList,
     ReplyNavigation,
     Drafts,
+    DraftsSlow,
+    DraftFailure(DraftFailure),
     BookmarkArchive {
         headerless: bool,
     },
@@ -34,8 +38,13 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     ControlInput,
+    NativeInput,
+    KeepAlive,
+    ArticlePaste,
+    ArticleFind,
     EditorClipboard,
     EditorColor,
+    EditorColorFailure(EditorColorFailure),
     ToastReconnect,
     PointerRows,
     ListBoundary,
@@ -43,11 +52,43 @@ pub(super) enum Scenario {
     LiveUpdates {
         origin: Option<String>,
         cancelled: bool,
+        roles: bool,
     },
+    ArticleStall,
     InlinePages {
         pages: Vec<Vec<u8>>,
         delay_ms: u64,
+        fragment_ms: u64,
+        native_input: bool,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorColorFailure {
+    Cancel,
+    Unsupported,
+    Partial,
+}
+impl EditorColorFailure {
+    fn editor(self) -> crate::editor_color::fixture::Editor {
+        crate::editor_color::fixture::Editor::new(
+            &[
+                if self == Self::Unsupported {
+                    "P\x1b[31;66;34m中文Q"
+                } else {
+                    "P\x1b[32m中\x1b[0m文\x1b[34mQ"
+                },
+                "",
+                "第三行",
+            ],
+            true,
+            false,
+            true,
+        )
+    }
+    pub fn wire(self) -> Vec<u8> {
+        self.editor().wire()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -627,7 +668,9 @@ where
             37 => b"\x1b[B",
             38 => b"\x1b[A",
             39 => b"\x1b[D",
-            34..=36 => b" ",
+            34 => b"l",
+            35 => b"\r",
+            36 => b" ",
             30 => b"\x1b[H",
             31 => b"\x1b[B\x1b[B\x1b[B\x1b[B",
             32 => b"\r",
@@ -733,8 +776,11 @@ pub(super) async fn serve(
     let deadline = if matches!(
         scenario,
         Scenario::Drafts
+            | Scenario::DraftsSlow
+            | Scenario::DraftFailure(_)
             | Scenario::Filters
             | Scenario::EditorColor
+            | Scenario::EditorColorFailure(_)
             | Scenario::ArticleSwitch
             | Scenario::LiveUpdates { .. }
             | Scenario::BookmarkList
@@ -750,9 +796,14 @@ pub(super) async fn serve(
             | Scenario::Surface
             | Scenario::ReplyNavigation
             | Scenario::ControlInput
+            | Scenario::NativeInput
+            | Scenario::KeepAlive
+            | Scenario::ArticlePaste
+            | Scenario::ArticleFind
             | Scenario::EditorClipboard
             | Scenario::PointerRows
             | Scenario::ListBoundary
+            | Scenario::ArticleStall
             | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
@@ -773,47 +824,50 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
-        if matches!(scenario,Scenario::Drafts) {
+        if matches!(scenario, Scenario::KeepAlive) {
+            if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x0c\x0c") {
+                return Err("keep-alive probe expected one exact refresh".into());
+            }
+            socket.send(Message::Binary(b"\x1b[2J\x1b[HKEEPALIVE VERIFIED - close this window".as_slice().into()))
+                .await.map_err(|error| error.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|error| error.to_string()),
+                _ => Err("keep-alive probe expected Close without additional input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticleFind) {
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(actual))) if actual.as_ref()==b"/") {
+                return Err("article find peer rejects search keystrokes; expected explicit slash".into());
+            }
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("article find peer expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticlePaste) {
+            for (expected,reply) in [(b"j".as_slice(),crate::replay::native_article_interaction_page()?),(b"A\r\xa4\xa4".as_slice(),navigation_page("main_menu")?)] {
+                if !matches!(socket.next().await,Some(Ok(Message::Binary(actual))) if actual.as_ref()==expected) {
+                    return Err("article paste peer expected one exact explicit paste".into());
+                }
+                socket.send(Message::Binary(reply.into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("article paste peer expected Close without duplicate or cancelled bytes".into()),
+            };
+        }
+        if matches!(scenario,Scenario::Drafts | Scenario::DraftsSlow | Scenario::DraftFailure(_)) {
+            let slow=matches!(scenario,Scenario::DraftsSlow);
+            let case=match scenario {Scenario::DraftFailure(case)=>Some(case),_=>None};
+            return drafts::run(&mut socket,slow,case).await;
+        }
+        if matches!(scenario,Scenario::ReplyNavigation|Scenario::LiveUpdates{roles:true,..}) {
             tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
             tokio::time::sleep(Duration::from_millis(120)).await;
-            socket.send(Message::Binary(navigation_page("list")?.into())).await.map_err(|e|e.to_string())?;
-            match socket.next().await {
-                Some(Ok(Message::Close(_)))=>return socket.flush().await.map_err(|e|e.to_string()),
-                Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[16]=>{},
-                _=>return Err("draft probe expected explicit post start or Close".into()),
-            }
-            let mut native=crate::editor_source::fixture::Native::new(&["看板預設格式","\x1b[32m請依格式填寫\x1b[m",""],"[測試] 範本標題",true);
-            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-            while let Some(message)=socket.next().await {
-                match message.map_err(|e|e.to_string())? {
-                    Message::Close(_)=>return socket.flush().await.map_err(|e|e.to_string()),
-                    Message::Binary(bytes)=>{
-                        // The station can flush between commands from one write.
-                        // Exercise complete intermediate editor redraws, rather
-                        // than applying title-return / Ctrl+Y batches atomically.
-                        let split = if bytes.iter().all(|b| matches!(b,25|12)) && bytes.contains(&25) {
-                            Some(1)
-                        } else if bytes.first()==Some(&25) {
-                            bytes.iter().position(|b| *b==13).map(|i|i+1)
-                        } else { None };
-                        if let Some(n)=split.filter(|n| *n<bytes.len()) {
-                            native.accept(&bytes[..n]);
-                            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-                            tokio::time::sleep(Duration::from_millis(80)).await;
-                            native.accept(&bytes[n..]);
-                        } else { native.accept(&bytes); }
-                        socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-                    },
-                    _=>return Err("draft probe rejects non-editor messages".into())
-                }
-            }
-            return Err("draft peer did not receive Close".into());
         }
         if matches!(scenario,Scenario::ReplyNavigation) {
-            tokio::time::sleep(Duration::from_millis(120)).await;
-            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
-            tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(reply_navigation_page()?.into())).await.map_err(|e|e.to_string())?;
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
@@ -825,8 +879,19 @@ pub(super) async fn serve(
         }
         if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
         if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
-        if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
-        if let Scenario::InlinePages {pages,delay_ms} = scenario {
+        if let Scenario::LiveUpdates {origin,cancelled,roles} = scenario {
+            if roles {socket.send(Message::Binary(live_updates::roles_page(1,23,45,origin.as_deref())?.into())).await.map_err(|e|e.to_string())?;}
+            return if cancelled {live_updates::cancel(&mut socket,origin.as_deref(),roles).await}else{live_updates::run(&mut socket,origin.as_deref(),roles).await};
+        }
+        if matches!(scenario,Scenario::ArticleStall) {
+            let first=socket.next().await;
+            if !matches!(&first,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {return Err("stalled article expected exactly one PageDown".into());}
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("stalled article must not retry before Close".into()),
+            };
+        }
+        if let Scenario::InlinePages {pages,delay_ms,fragment_ms,native_input} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {
             let received=socket.next().await;
@@ -836,11 +901,19 @@ pub(super) async fn serve(
             eprintln!("synthetic article page {} requested at {}ms",index+2,started.elapsed().as_millis());
             // Each response is deliberately fragmented; local history must not refetch.
             // Historical browsing must not send PageUp or refetch old images.
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            if delay_ms > 0 { tokio::time::sleep(Duration::from_millis(delay_ms)).await; }
             let split=second.len()/2;
             socket.send(Message::Binary(second[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            if fragment_ms > 0 { tokio::time::sleep(Duration::from_millis(fragment_ms)).await; }
             socket.send(Message::Binary(second[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+            }
+            if native_input {
+                for expected in [b"q".as_slice(), b"\xa4\xa4".as_slice()] {
+                    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                        return Err("native article expected one raw handoff then one Chinese commit".into());
+                    }
+                    socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+                }
             }
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
@@ -913,6 +986,7 @@ pub(super) async fn serve(
                 socket.send(Message::Binary(page[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
                 tokio::time::sleep(Duration::from_millis(80)).await;
                 socket.send(Message::Binary(page[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+                eprintln!("synthetic article switch {article} {}", if second { 2 } else { 1 });
             }
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
@@ -939,17 +1013,40 @@ pub(super) async fn serve(
                 _ => Err("list boundary probe expected Close without extra input".into()),
             };
         }
-        if matches!(scenario, Scenario::EditorColor) {
-            let mut editor=crate::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true);
+        if matches!(scenario, Scenario::EditorColor | Scenario::EditorColorFailure(_)) {
+            let failure=match scenario {Scenario::EditorColorFailure(case)=>Some(case),_=>None};
+            let mut editor=failure.unwrap_or(EditorColorFailure::Cancel).editor();
+            let original=editor.lines.clone();
+            let mut interrupted=false;
             for _ in 0..4096 {
                 match socket.next().await {
                     Some(Ok(Message::Binary(bytes)))=>{
                         if bytes.len()>4096{return Err("editor colour probe input too large".into());}
+                        if interrupted {return Err("editor colour probe forbids commands after partial failure".into());}
                         editor.accept(&bytes);
-                        socket.send(Message::Binary(editor.wire().into())).await.map_err(|e|e.to_string())?;
+                        let mut wire=editor.wire();
+                        if failure==Some(EditorColorFailure::Cancel){tokio::time::sleep(Duration::from_millis(350)).await;}
+                        let first_code=b"\x1b[m";
+                        if failure==Some(EditorColorFailure::Partial) && editor.lines.iter().any(|line|line.windows(first_code.len()).any(|part|part==first_code)) {
+                            interrupted=true;
+                            wire.extend_from_slice(b"\x1b[24;1H\x1b[2KSYNTHETIC STATUS REVOKED AFTER FIRST INSERT");
+                        }
+                        socket.send(Message::Binary(wire.into())).await.map_err(|e|e.to_string())?;
                     },
                     Some(Ok(Message::Close(_)))=>{
                         socket.flush().await.map_err(|e|e.to_string())?;
+                        if let Some(case)=failure {
+                            return match case {
+                                EditorColorFailure::Cancel if editor.lines==original && !editor.commands.is_empty()=>Ok(()),
+                                EditorColorFailure::Unsupported if editor.lines==original && editor.preview && !editor.insert=>Ok(()),
+                                EditorColorFailure::Partial=>{
+                                    let expected=["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行\x1b[m"];
+                                    let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
+                                    if interrupted && editor.lines==expected {Ok(())}else{Err("partial colour fixture did not preserve exact first-insert-only document".into())}
+                                }
+                                _=>Err("editor colour negative fixture document/mode differs".into()),
+                            };
+                        }
                         let expected=["P\x1b[32m\x1b[0;1;31;40m中\x1b[0m\x1b[0;1;31;40m文\x1b[34m\x1b[0;1;31;40mQ\x1b[m","","\x1b[0;1;31;40m第三行\x1b[m"];
                         let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
                         return if editor.lines==expected && editor.preview && !editor.insert {Ok(())}else{Err("editor colour probe document/mode differs from independent expected".into())};
@@ -977,12 +1074,24 @@ pub(super) async fn serve(
                 _ => Err("editor clipboard probe expected Close without extra input".into()),
             };
         }
-        if matches!(scenario, Scenario::ControlInput) {
-            for (index, expected) in [24_u8, 26, 1].into_iter().enumerate() {
-                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[expected]) {
+        if matches!(scenario, Scenario::ControlInput | Scenario::NativeInput) {
+            let native = matches!(scenario, Scenario::NativeInput);
+            let expected: &[&[u8]] = if native {
+                &[b"\x18", b"\x1a", b"\x01", b"p", b"\xa4\xa4"]
+            } else {
+                &[b"\x18", b"\x1a", b"\x01"]
+            };
+            let label = if native { "INPUT" } else { "CONTROL INPUT" };
+            for (index, bytes_expected) in expected.iter().enumerate() {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == *bytes_expected) {
                     return Err(format!("control input probe rejected step {}", index + 1));
                 }
-                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KCONTROL INPUT {}/3 VERIFIED",index+1).into_bytes().into()))
+                let mut wire = format!("\x1b[1;1H\x1b[2K{label} {}/{} VERIFIED", index + 1, expected.len());
+                if native {
+                    wire.insert_str(0, "\x1b7");
+                    wire.push_str("\x1b8");
+                }
+                socket.send(Message::Binary(wire.into_bytes().into()))
                     .await.map_err(|e| e.to_string())?;
             }
             return match socket.next().await {

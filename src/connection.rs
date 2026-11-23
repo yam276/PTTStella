@@ -17,7 +17,7 @@ use tokio::{
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub const PTT_ENDPOINT: &str = crate::sites::PTT;
-pub use probe::MouseSampleProbe;
+pub use probe::{DraftFailure, EditorColorFailure, MouseSampleProbe};
 type WebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 use transport::Socket;
 type Dial = JoinHandle<Result<Socket, String>>;
@@ -88,6 +88,10 @@ impl View {
 enum Command {
     Mouse(crate::mouse::input::Event),
     MouseSample(crate::mouse::input::Sample),
+    MouseRevoke {
+        generation: u64,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     KeepAlive(bool),
     Connect,
     SwitchSite(crate::sites::Target),
@@ -95,6 +99,11 @@ enum Command {
     Input {
         generation: u64,
         bytes: Vec<u8>,
+    },
+    Paste {
+        stamp: Stamp,
+        bytes: Vec<u8>,
+        reply: oneshot::Sender<Result<(), String>>,
     },
     DraftSource {
         stamp: Stamp,
@@ -123,14 +132,22 @@ enum Command {
         stamp: Stamp,
         intent: Intent,
         source: navigation::Source,
+        cancellation: Option<NavigationCancellation>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     Shutdown(oneshot::Sender<CloseOutcome>),
 }
 #[derive(Clone, Copy, Default)]
 struct SessionControls {
-    keep_alive: Option<(Stamp, bool)>,
+    keep_alive: Option<KeepAliveGate>,
     cancel_through: Option<(Stamp, u64)>,
+}
+
+#[derive(Clone, Copy)]
+struct KeepAliveGate {
+    stamp: Stamp,
+    ready: bool,
+    interruptions: u64,
 }
 fn stamp_order(stamp: Stamp) -> (u64, u64, u64) {
     (stamp.generation, stamp.input_epoch, stamp.revision)
@@ -152,6 +169,17 @@ pub struct Reply {
     deadline: tokio::time::Instant,
     expired: String,
     closed: String,
+}
+/// Revokes a queued navigation immediately, independently of a UI future's next poll.
+#[derive(Clone, Default)]
+pub struct NavigationCancellation(std::sync::Arc<std::sync::atomic::AtomicBool>);
+impl NavigationCancellation {
+    pub fn cancel(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release);
+    }
+    fn cancelled(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Acquire)
+    }
 }
 impl Reply {
     pub async fn wait(self) -> Result<(), String> {
@@ -306,6 +334,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Native context actions that do not send terminal input; peer rejects bytes.
+    pub fn start_context_menu_probe(station_mouse: bool) -> Result<Self, String> {
+        let mut bytes = probe::navigation_page("reading_middle")?;
+        if station_mouse {
+            bytes.extend_from_slice(b"\x1b[?1003;1006h");
+        }
+        Self::start_ui_probe(bytes)
+    }
     pub fn start_pointer_rows_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::pointer_menu()?, probe::Scenario::PointerRows)?;
@@ -331,6 +367,23 @@ impl Connection {
     }
     pub fn start_drafts_probe() -> Result<Self, String> {
         let connection = Self::start_owned_probe(probe::password_page()?, probe::Scenario::Drafts)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_drafts_failure_probe(case: DraftFailure) -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::password_page()?, probe::Scenario::DraftFailure(case))?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Strict template read only; local storage probes cannot replace station text.
+    pub fn start_drafts_storage_probe() -> Result<Self, String> {
+        Self::start_drafts_failure_probe(DraftFailure::LocalOnly)
+    }
+    /// Explicit slow loopback fixture for native capture/transfer cancellation.
+    pub fn start_drafts_slow_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::password_page()?, probe::Scenario::DraftsSlow)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -360,9 +413,31 @@ impl Connection {
         origin: Option<String>,
         cancelled: bool,
     ) -> Result<Self, String> {
+        Self::live_updates_probe(origin, cancelled, false)
+    }
+    pub fn start_live_updates_roles_probe(
+        origin: Option<String>,
+        cancelled: bool,
+    ) -> Result<Self, String> {
+        Self::live_updates_probe(origin, cancelled, true)
+    }
+    fn live_updates_probe(
+        origin: Option<String>,
+        cancelled: bool,
+        roles: bool,
+    ) -> Result<Self, String> {
+        let initial = if roles {
+            probe::password_page()?
+        } else {
+            probe::live_updates::page(1, 23, 45, origin.as_deref())?
+        };
         let connection = Self::start_owned_probe(
-            probe::live_updates::page(1, 23, 45, origin.as_deref())?,
-            probe::Scenario::LiveUpdates { origin, cancelled },
+            initial,
+            probe::Scenario::LiveUpdates {
+                origin,
+                cancelled,
+                roles,
+            },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)
@@ -389,6 +464,50 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Native input fixture adds one printable key and one UAO commit to the Control-key sequence.
+    pub fn start_native_input_probe() -> Result<Self, String> {
+        let bytes =
+            b"\x1b[2J\x1b[HINPUT 0/5 - Ctrl+X, Ctrl+Z, Ctrl+A, p, then IME\x1b[22;5H\x1b[?25h";
+        let connection = Self::start_owned_probe(bytes.to_vec(), probe::Scenario::NativeInput)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Synthetic article list with a shortened idle interval and a strict refresh peer.
+    pub fn start_keep_alive_probe() -> Result<Self, String> {
+        Self::start_keep_alive_page_probe(probe::navigation_page("list")?)
+    }
+    pub fn start_article_keep_alive_probe() -> Result<Self, String> {
+        Self::start_keep_alive_page_probe(crate::replay::native_article_interaction_page()?)
+    }
+    fn start_keep_alive_page_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        Self::start_owned_probe_with_timing(
+            bytes,
+            probe::Scenario::KeepAlive,
+            liveness::Timing {
+                idle: Duration::from_secs(3),
+                poll: Duration::from_millis(50),
+                ..liveness::Timing::default()
+            },
+        )
+    }
+    /// Exact plain j, then an explicitly confirmed two-line UAO paste.
+    pub fn start_article_paste_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            crate::replay::native_article_interaction_page()?,
+            probe::Scenario::ArticlePaste,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Local finding sends nothing. Only an explicit station slash is accepted.
+    pub fn start_article_find_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            crate::replay::native_article_find_page()?,
+            probe::Scenario::ArticleFind,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Local editor: two ANSI-preview keys, one exact confirmed colour paste,
     /// another preview key, then the normal acknowledged Close.
     pub fn start_editor_clipboard_probe(bytes: Vec<u8>) -> Result<Self, String> {
@@ -398,6 +517,12 @@ impl Connection {
     }
     pub fn start_editor_color_probe(bytes: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(bytes, probe::Scenario::EditorColor)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_editor_color_failure_probe(case: EditorColorFailure) -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(case.wire(), probe::Scenario::EditorColorFailure(case))?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -413,27 +538,78 @@ impl Connection {
             probe::Scenario::InlinePages {
                 pages: vec![second],
                 delay_ms: 0,
+                fragment_ms: 150,
+                native_input: false,
             },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// One exact PageDown without a response, then Close; rejects retries.
+    pub fn start_article_stall_probe(first: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(first, probe::Scenario::ArticleStall)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Explicit bounded local fixture for cancellable article preloading.
     pub fn start_article_load_probe(first: Vec<u8>, pages: Vec<Vec<u8>>) -> Result<Self, String> {
-        if pages.is_empty() || pages.len() > 64 || pages.iter().any(|p| p.len() > 64 * 1024) {
+        Self::article_load_probe(first, pages, 500, 150)
+    }
+    /// Same exact paging peer with immediate replies for frontend comparisons.
+    /// The ordinary cancellation/fragmentation probe retains its slow schedule.
+    pub fn start_fast_article_load_probe(
+        first: Vec<u8>,
+        pages: Vec<Vec<u8>>,
+    ) -> Result<Self, String> {
+        Self::article_load_probe(first, pages, 0, 0)
+    }
+    fn article_load_probe(
+        first: Vec<u8>,
+        pages: Vec<Vec<u8>>,
+        delay_ms: u64,
+        fragment_ms: u64,
+    ) -> Result<Self, String> {
+        // Allow the synthetic 190-page article to cross the 4,096-row cache boundary.
+        if pages.is_empty() || pages.len() > 192 || pages.iter().any(|p| p.len() > 64 * 1024) {
             return Err("invalid article load probe pages".into());
         }
         let connection = Self::start_owned_probe(
             first,
             probe::Scenario::InlinePages {
                 pages,
+                delay_ms,
+                fragment_ms,
+                native_input: false,
+            },
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Two-page native cache followed by exact q and one UAO Chinese commit.
+    pub fn start_article_input_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
+        if second.len() > 64 * 1024 {
+            return Err("invalid native article input fixture".into());
+        }
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages: vec![second],
                 delay_ms: 500,
+                fragment_ms: 150,
+                native_input: true,
             },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
     fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
+        Self::start_owned_probe_with_timing(bytes, scenario, liveness::Timing::default())
+    }
+    fn start_owned_probe_with_timing(
+        bytes: Vec<u8>,
+        scenario: probe::Scenario,
+        timing: liveness::Timing,
+    ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -442,9 +618,10 @@ impl Connection {
             listener.local_addr().map_err(|e| e.to_string())?
         );
         let listener = tokio::net::TcpListener::from_std(listener).map_err(|e| e.to_string())?;
-        let connection = Self::start_at(
+        let connection = Self::start_with_timing(
             Screen::new(80, 24).map_err(|error| error.to_string())?,
             endpoint,
+            timing,
         )?;
         let peer = runtime.spawn(probe::serve(listener, bytes, scenario));
         *connection
@@ -463,15 +640,39 @@ impl Connection {
         self.enqueue(Command::KeepAlive(enabled))
     }
     pub fn keep_alive_gate(&self, stamp: Stamp, ready: bool) {
-        // A blocked UI cannot lose its pause request to a full input queue.
-        self.session_ui
-            .send_modify(|ui| ui.keep_alive = Some((stamp, ready)));
+        // Preserve a pause even if pause and resume collapse into one watch update.
+        self.session_ui.send_modify(|ui| {
+            let interruptions = ui.keep_alive.map_or(0, |gate| gate.interruptions);
+            ui.keep_alive = Some(KeepAliveGate {
+                stamp,
+                ready,
+                interruptions: interruptions.saturating_add(u64::from(!ready)),
+            });
+        });
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
             return Err(crate::msg!("input-too-large"));
         }
         self.enqueue(Command::Input { generation, bytes })
+    }
+    /// Recheck the preview's full stamp on the single writer before sending.
+    pub fn request_paste(&self, stamp: Stamp, bytes: Vec<u8>) -> Result<Reply, String> {
+        if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
+            return Err(crate::msg!("input-too-large"));
+        }
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::Paste {
+            stamp,
+            bytes,
+            reply,
+        })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: crate::msg!("paste-send-unconfirmed"),
+            closed: crate::msg!("connection-service-stopped"),
+        })
     }
     pub fn mouse_report(&self, event: crate::mouse::input::Event) -> Result<(), String> {
         // Keep capacity for an admitted release, manual keys and shutdown.
@@ -498,6 +699,18 @@ impl Connection {
     pub fn revoke_mouse(&self, generation: u64) {
         self.mouse_ui
             .send_modify(|controls| controls.revoke(generation));
+    }
+    /// Priority revoke plus a bounded acknowledgement after publishing its snapshot.
+    pub fn request_mouse_revoke(&self, generation: u64) -> Result<Reply, String> {
+        self.revoke_mouse(generation);
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::MouseRevoke { generation, reply })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(2),
+            expired: crate::msg!("station-mouse-busy"),
+            closed: crate::msg!("connection-service-stopped"),
+        })
     }
     pub async fn login(&self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
         self.request_login(stamp, credentials)?.wait().await
@@ -596,11 +809,31 @@ impl Connection {
         intent: Intent,
         source: navigation::Source,
     ) -> Result<Reply, String> {
+        self.request_navigation(stamp, intent, source, None)
+    }
+    pub fn request_cancellable_navigate(
+        &self,
+        stamp: Stamp,
+        intent: Intent,
+        source: navigation::Source,
+    ) -> Result<(Reply, NavigationCancellation), String> {
+        let cancellation = NavigationCancellation::default();
+        let reply = self.request_navigation(stamp, intent, source, Some(cancellation.clone()))?;
+        Ok((reply, cancellation))
+    }
+    fn request_navigation(
+        &self,
+        stamp: Stamp,
+        intent: Intent,
+        source: navigation::Source,
+        cancellation: Option<NavigationCancellation>,
+    ) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Navigate {
             stamp,
             intent,
             source,
+            cancellation,
             reply,
         })?;
         Ok(Reply {
@@ -737,6 +970,8 @@ mod liveness;
 mod mouse_control;
 mod output;
 mod probe;
+#[doc(hidden)]
+pub mod site_probe;
 mod ssh;
 #[cfg(test)]
 mod tests;

@@ -3,7 +3,7 @@ use crate::screen::Frame;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 pub struct Position {
     pub col: usize,
     pub row: usize,
@@ -148,6 +148,18 @@ pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, Str
         spans: Vec::new(),
         rows: start.row..end.row + 1,
     };
+    // Screen and article projections are row ordered. Visit each selected row
+    // slice once instead of rescanning the entire document for every line.
+    // Keep the public Frame API's prior order semantics for hand-built frames.
+    let ordered = frame
+        .glyphs
+        .windows(2)
+        .all(|pair| pair[0].row <= pair[1].row);
+    let mut begin = if ordered {
+        frame.glyphs.partition_point(|g| g.row < start.row)
+    } else {
+        0
+    };
     for row in start.row..=end.row {
         if row != start.row {
             result.text.push('\n');
@@ -163,8 +175,12 @@ pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, Str
             start: right,
             end: left,
         };
-        for glyph in frame
-            .glyphs
+        let finish = if ordered {
+            frame.glyphs.partition_point(|g| g.row <= row)
+        } else {
+            frame.glyphs.len()
+        };
+        for glyph in frame.glyphs[begin..finish]
             .iter()
             .filter(|g| g.row == row && g.col < right && g.col + g.width > left)
         {
@@ -175,6 +191,148 @@ pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, Str
         if span.start < span.end {
             result.spans.push(span);
         }
+        if ordered {
+            begin = finish;
+        }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn workload(rows: usize, cols: usize) -> Frame {
+        let mut frame = crate::screen::Screen::new(cols, 24).unwrap().frame();
+        let glyph = frame.glyphs[0].clone();
+        frame.rows = rows;
+        frame.glyphs = (0..rows)
+            .flat_map(|row| {
+                (0..cols).map({
+                    let glyph = glyph.clone();
+                    move |col| {
+                        let mut g = glyph.clone();
+                        g.row = row;
+                        g.col = col;
+                        g.text = "A".into();
+                        g
+                    }
+                })
+            })
+            .collect();
+        frame
+    }
+    #[test]
+    fn long_reverse_selection_preserves_endpoints_and_complete_middle_rows() {
+        let frame = workload(837, 80);
+        let selected = extract(
+            &frame,
+            &Selection::Range {
+                anchor: Position { row: 602, col: 1 },
+                focus: Position { row: 600, col: 7 },
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            selected.text,
+            format!("{}\n{}\nAA", "A".repeat(73), "A".repeat(80))
+        );
+        assert_eq!(selected.rows, 600..603);
+        assert_eq!(
+            selected.spans,
+            vec![
+                Span {
+                    row: 600,
+                    start: 7,
+                    end: 80
+                },
+                Span {
+                    row: 601,
+                    start: 0,
+                    end: 80
+                },
+                Span {
+                    row: 602,
+                    start: 0,
+                    end: 2
+                }
+            ]
+        );
+        let all = extract(&frame, &Selection::All).unwrap();
+        assert_eq!(
+            all.text,
+            ("A".repeat(80) + "\n").repeat(836) + &"A".repeat(80)
+        );
+        assert_eq!(all.spans.len(), 837);
+    }
+    #[test]
+    fn sparse_ordered_rows_keep_empty_lines_without_consuming_a_future_row() {
+        let mut frame = workload(3, 4);
+        frame.glyphs.retain(|g| g.row != 1);
+        let selected = extract(&frame, &Selection::All).unwrap();
+        assert_eq!(selected.text, "AAAA\n\nAAAA");
+        assert_eq!(
+            selected.spans,
+            vec![
+                Span {
+                    row: 0,
+                    start: 0,
+                    end: 4
+                },
+                Span {
+                    row: 2,
+                    start: 0,
+                    end: 4
+                }
+            ]
+        );
+    }
+    #[test]
+    fn unordered_public_frames_keep_the_original_per_row_glyph_order() {
+        let mut frame = workload(2, 3);
+        for (g, text) in frame.glyphs.iter_mut().zip(["A", "B", "C", "D", "E", "F"]) {
+            g.text = text.into();
+        }
+        let original = frame.glyphs.clone();
+        frame.glyphs = [4, 2, 3, 0, 5, 1].map(|i| original[i].clone()).to_vec();
+        let selected = extract(&frame, &Selection::All).unwrap();
+        assert_eq!(selected.text, "CAB\nEDF");
+        assert_eq!(
+            selected.spans,
+            vec![
+                Span {
+                    row: 0,
+                    start: 0,
+                    end: 3
+                },
+                Span {
+                    row: 1,
+                    start: 0,
+                    end: 3
+                }
+            ]
+        );
+    }
+    #[test]
+    #[ignore = "manual fixed release workload; no wall-time threshold in ordinary tests"]
+    fn measure_long_article_selection() {
+        let frame = workload(837, 80);
+        let expected = ("A".repeat(80) + "\n").repeat(836) + &"A".repeat(80);
+        let mut samples = Vec::new();
+        for _ in 0..3 {
+            assert_eq!(extract(&frame, &Selection::All).unwrap().text, expected);
+        }
+        for _ in 0..7 {
+            let now = std::time::Instant::now();
+            for _ in 0..15 {
+                let text = extract(std::hint::black_box(&frame), &Selection::All).unwrap();
+                assert_eq!(text.text.len(), expected.len());
+                assert_eq!(text.spans.len(), 837);
+                std::hint::black_box(text);
+            }
+            samples.push(now.elapsed().as_nanos() / 15);
+        }
+        println!(
+            "selection_workload rows=837 cols=80 warmup=3 batches=7 iterations=15 ns_per_selection={samples:?}"
+        );
+    }
 }

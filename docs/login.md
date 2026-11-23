@@ -4,6 +4,16 @@
 
 ## 操作
 
+Slint 登入面板的帳密欄、提示及按鈕使用面板內的捲動區，適用於獨立登入面板和設定內嵌頁。`3277ac1` 在隔離 X11 可重現帳密欄及按鈕被裁切。修正後以合成兩階段登入核對帳密欄可點選、Enter 送出、錯誤驗證碼提示及手動救援碼。成功回到站端主選單後收到唯一 Close ACK。此輪未勾選保存密碼，系統密碼庫不可用時仍可完成單次登入。收據位於 `.local/verification/slint-video-toggle/login-x11/`。兩個登入案例使用的 ELF 與 `299a0b3` 交付檔逐位元相同。
+
+設定內嵌表單已透過隔離 X11 鍵鼠從浮球進入設定，搜尋 `privacy`，編輯帳密欄並操作登入。縮到 840×470 時仍可操作，Esc 可關閉設定。在非帳號提示畫面送出時，表單提示先回到登入畫面，合成站零新增輸入且收到一次 Close ACK。內嵌表單成功登入與平台原生操作仍待驗。收據位於 `.local/verification/slint-login-panel-candidate/embedded/`。
+
+### cb4fbfc Apple Silicon 兩階段登入
+
+直接以 Apple Silicon 出貨 App 開 `--probe-login-2fa`。使用本機合成站及隔離資料。原生點擊能開啟面板並聚焦帳號、密碼欄，記住帳密保持未勾選。兩個新程序分別用 Enter 和面板登入按鈕送出表單。兩輪均辨識錯碼提示、手動輸入救援碼並顯示站端主功能表。合成站依序收到精確的帳號、密碼和兩組驗證碼，接著各收到唯一 Close ACK。
+
+測試控制器使用 macOS 帶 Unicode 文字的鍵盤事件與原生點擊。先前兩輪只送虛擬鍵碼，未完成驗證碼輸入並被合成站拒絕，實體鍵盤與 IME 仍待各自驗收。此輪涵蓋獨立面板的本機流程。正式 Keychain 接手、設定內嵌表單成功登入和實站仍待驗。收據及清理清單位於 `.local/verification/slint-article-arrow/arm64-login/`。
+
 工具列的「登入」開啟視窗。首次輸入帳號、密碼，預設不保存；明確勾選「將此帳號與密碼存入系統密碼庫」才寫入。保存的是一個預設帳號，下一次明確保存會替換這筆帳密。保存只表示系統密碼庫寫入完成，不代表 PTT 已接受密碼。
 
 再次開啟可看見帳號，密碼欄保持空白；留空並按登入才取用已存密碼。改成另一帳號時必須重新輸入密碼，不會沿用其他帳號的密碼。「移除已存帳密」只移除本 App 的這筆密碼庫項目，不變更站端密碼，也不登出目前連線。未勾選且輸入密碼時完全不呼叫密碼庫；保存失敗不送出登入。密碼庫無法使用時，仍可輸入帳密取消勾選單次登入，或使用原始鍵盤手動登入。
@@ -64,6 +74,42 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 `credential-store` feature 可在沒有 WebView／GTK 的環境編譯同一生產密碼庫；desktop 自動包含此 feature。`cargo test --locked --features credential-store --lib login::vault` 使用每測試獨立記憶體 store 驗證同一 consent reducer，涵蓋不勾選、留空取用、替換／不替換、帳號不符、超量／損壞資料、保存失敗不產生 Ready 及移除失敗保留。一般測試不讀寫使用者密碼庫。
 
 明確執行 `cargo test --locked --features credential-store --lib login::vault::tests::native_roundtrip -- --ignored --exact` 才測真正 OS 後端：獨立唯一 synthetic service、固定合成帳密、不勾選零保存、勾選寫入、另一個程序讀回、錯帳號拒絕、兩次移除與確認不存在。可能需要使用者處理 OS 解鎖提示；不使用正式 service，不連 PTT。Linux 可在獨立容器的 D-Bus／GNOME Keyring 中驗證，不改使用者桌面密碼庫。`native_read_child` 僅由父程序啟動。
+
+### Linux Secret Service 隔離驗收
+
+`96e5159` 的 Linux x64 測試執行檔在 ARM Debian Podman／QEMU 中連至獨立的 D-Bus 及 GNOME Keyring 42.1。容器在執行測試前斷開外部網路。實際 `native_roundtrip` 通過，核對未勾選無保存、明確保存、跨程序讀回及移除。測試使用唯一合成 service。容器與其中的臨時 Keyring 已移除，收據位於 `.local/verification/slint-settings-focus-mount/linux-vault/`。實機登入 UI、OS 解鎖及 Windows Credential Manager 待驗。
+
+### Windows Win32 憑證 API 隔離驗收
+
+以 `d7cc6e1` 交叉編譯 Windows x64 的 production vault 測試，與候選 `d047e55` 間只有文件變更。在斷開外部網路的 Debian ARM／QEMU x64／Wine 10.0，以獨立 Wine prefix 執行 `native_roundtrip`。未勾選零保存、明確保存、另一程序讀回、錯帳號拒絕、兩次移除及重讀確認不存在均通過。測試使用唯一合成 service，收據在 `.local/verification/slint-windows-refresh-rate/windows-vault/result.json`。這是 Wine 提供的 Win32 API，Microsoft Credential Manager、Windows 實機登入 UI 與正式服務接手待驗。
+
+### macOS 舊紀錄與重新簽章驗收
+
+`cargo --config .local/slint-build.toml test --locked --offline --release --features native-player-probe --lib login::vault::tests::native_keychain_legacy_and_signing -- --ignored --exact --nocapture`
+
+合成紀錄以 v0.4.1 和 Dioxus 基準的「帳號、NUL、密碼」格式獨立建立，寫入唯一的測試 service。使用現行生產 vault 的另一個同簽章程序能讀回。將同一測試程式暫存一份，以不同 ad-hoc identifier 重簽且核對簽章後，macOS 在測試程序禁止 Keychain UI 的條件下回報 `-25293`。改簽程序拒絕使用舊密碼，但接受單次手動提供的合成帳密。原寫入者核對紀錄未變，另驗缺少分隔符與超量紀錄都拒讀且保留原 bytes，最後刪除測試項目並確認不存在。[Apple Security Framework 狀態碼](https://developer.apple.com/documentation/security/security-framework-result-codes)
+
+這是兩個簽章身分的原生 Keychain 測試，同一份程式碼隔離了簽章因素。正式 App 更新的授權視窗、使用者重新授權後的讀回與其他平台仍待驗。測試只建立及刪除自己的合成項目，既有 ACL 和正式 service 保持原狀。首輪改簽測試漏報子程序狀態，補上診斷後判定為系統授權拒絕；其原始失敗仍保留。
+
+原始 log、測試 binary SHA、資料格式來源差異和清理記錄在 `.local/verification/slint-keychain-current/`。兩份暫存目錄已確認移除，最終改簽副本為 22,590,352 regular-file bytes；固定 Cargo 快取沿用。
+
+### macOS 正式服務名的隔離演練
+
+`cargo --config .local/slint-build.toml test --locked --features native-player-probe --lib login::vault::tests::product_rehearsal::native_product_service_rehearsal -- --ignored --exact --nocapture`
+
+兩份合成 App 使用正式 Bundle ID `io.github.yam276.pttstella` 和不同 ad hoc cdhash，經獨立的暫存鑰匙圈使用 `Scope::Product` 的正式 service。第一份以舊格式保存合成帳密。第二份在測試程序停用系統授權介面時收到存取拒絕，空密碼無法登入，手動提供合成密碼仍可準備單次登入。研究服務在該鑰匙圈沒有舊紀錄。第一份回退時讀回原值，再移除並確認項目不存在。測試結束後暫存鑰匙圈已清理，使用者搜尋清單一致。
+
+這次驗證隔離鑰匙圈和正式名稱下的行為。正式簽章的實際系統授權提示，以及重新授權後由 Slint 前端讀回仍待驗。原始收據在 `.local/verification/slint-rollback-audio-candidate/product-keychain.log`。
+
+2026-11-13 配合 `4d7d174` 檔案回退演練，以既有 Rust 測試執行檔重跑上述案例。舊格式寫入、不同 ad-hoc 簽章接手拒絕、單次手動登入準備、原簽章回退讀回及刪除皆通過。獨立鑰匙圈已刪除，使用者搜尋清單逐位元相同。測試執行檔雜湊與收據位於 `.local/verification/slint-rollback-bookmark-load/isolated-keychain.json`。
+
+配合 `b57eae8` 候選的資料矩陣，以上案例以相同產品來源重跑通過。兩份現有候選與回退 App 使用 ad-hoc 簽章，主機只查到兩份 Apple Development 身分。正式 Developer ID 重新授權待驗。收據在 `.local/verification/slint-current-store-roundtrip/profile-and-keychain.json` 及同目錄的 `isolated-keychain.log`。
+
+`3277ac1` 再次通過正式服務名稱的隔離鑰匙圈演練。寫入舊格式、拒絕不同 ad-hoc 簽章接手、單次手動登入準備，以及原簽章回退讀回並移除均通過。測試關閉系統授權介面，清理後使用者搜尋清單逐位元相同。交付 App 的 `--show-profile` 確認使用 `SlintResearch`，查詢期間沒有讀寫 store 或開啟 vault。正式 Developer ID 的重新授權仍待驗。收據在 `.local/verification/slint-video-toggle/product-keychain.json` 和 `product-keychain.log`。
+
+以 `cb4fbfc` 的產品程式重跑正式服務名的隔離鑰匙圈演練。舊格式寫入、不同 ad-hoc 簽章接手拒絕、單次手動登入準備、原簽章回退讀回及刪除均通過。測試關閉系統授權介面，獨立鑰匙圈已刪除，使用者搜尋清單逐位元相同。Apple Silicon 候選的封裝執行檔另確認 `--show-profile` 使用 `SlintResearch`，未讀取資料檔或開啟 vault。這台 Mac 未找到可用的 Developer ID Application 簽章身分。正式簽章的系統授權及前端接手保留待驗。收據在 `.local/verification/slint-article-arrow/store-rehearsal/`。
+
+`1d3e702` 的產品來源再通過正式服務名的隔離鑰匙圈案例，包含舊格式、不同 ad-hoc 簽章拒絕、手動登入準備、回退讀回及清除。另以出貨 App 的本機兩階段登入探針，使用原生滑鼠登入，送出錯誤驗證碼，再手動送合成救援碼回到主功能表，收到唯一 Close ACK 並以 0 退出。候選的 `--show-profile` 確認使用 `SlintResearch`，查詢時未開啟 vault。測試收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-rollback/`。此機未找到 Developer ID Application 簽章身分，實際系統授權視窗及重新授權後的前端讀回仍待驗。
 
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 

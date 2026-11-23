@@ -1,0 +1,606 @@
+# Slint／Dioxus macOS 效能量測入口
+
+這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
+
+## 2026-11-14 1d3e702 同負載複測
+
+Apple M3 Ultra／macOS 15.7.7，以 Slint `1d3e702` 出貨 App 的 Skia software 對照同開發線的 release Dioxus。Dioxus 從固定 Cargo target 核對建置，執行檔雜湊仍與 `cd64435` 一致，使用系統 WKWebView 20621.3.11.11.3。兩版採相同的 1040×768 外窗、bundled 字型 23／20／100、隔離資料及本機素材，每輪使用新程序。視窗位置由系統決定。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 renderer ACK，中位數 | 5.69 ms | 56.83 ms |
+| 首筆取頁至 837 行完整快取，中位數 | 525.28 ms | 524.89 ms |
+| 首筆取頁至全文 renderer ACK，中位數 | 537.96 ms | 553.43 ms |
+| 快取 PageDown，p50／p95 | 36.62／39.31 ms | 81.66／86.60 ms |
+| 快取 PageUp，p50／p95 | 36.65／38.81 ms | 39.82／87.18 ms |
+| 雙 GIF，10 秒程序族 CPU 中位數 | 1.118 秒 | 1.421 秒 |
+| 雙 GIF，程序族 physical footprint 取樣峰值中位數 | 118.32 MiB | 712.98 MiB |
+| 雙 GIF，程序族 RSS 取樣峰值中位數 | 309.00 MiB | 518.95 MiB |
+
+長文每版兩輪，各核對 37 次取頁。每版各執行 100 次原生 PageDown 和 100 次 PageUp，逐次核對畫面指紋，截圖辨識結果分別為第 1 → 28 → 1 行與第 1 → 23 → 1 行。翻頁計時包含按鍵、視窗擷取及輪詢。兩版完整快取中位數差不到 1 ms，快取翻頁 p95 則低約 55%。Renderer ACK 是各前端自己的提交觀測點，差值不代表螢幕掃描時間。
+
+雙 GIF 每版三輪，兩個網址各下載一次。兩張圖皆為 512×160、32 幀、每幀 100 ms。暖機 1 秒後取樣 10 秒，每輪 101 筆程序族資源與 201 筆前景觀察，首尾皆確認兩圖換幀。Slint footprint 峰值中位數低約 83%，CPU 中位數本輪低約 21%。Slint 個別 CPU 樣本為 1.103–1.232 秒，Dioxus 為 1.410–1.482 秒。先前複測有重疊區間。Dioxus 的綜合探針因自動展圖劇本未執行手動展圖及 PNG 匯出而維持 `failed`，雙 GIF 效能樣本依實際雙圖、網路、前景、資源與退出收據獨立驗證。
+
+一輪 Slint 長文在首頁後失焦，未派出下一頁。一輪 Dioxus 在雙 GIF 取樣中失去前景。兩輪排除並補跑，原始證據保留。十個有效樣本正常退出、收到唯一 Close ACK，HTTP worker 均已結束。全部樣本中取樣到的程序身分均已退出。本輪使用本機合成負載，實站及其他平台效能仍待驗。
+
+數據與重跑工具在 `.local/verification/slint-article-arrow/arm64-reading/current-1d3e702/`。摘要為 `goal-retest-comparison.json`。四個隔離暫存目錄與視窗控制器均已移除，路徑及磁碟觀測在 `goal-retest-cleanup.json`。
+
+## 2026-11-14 1d3e702 長文、翻頁與雙 GIF 重測
+
+Apple M3 Ultra／macOS 15.7.7 使用 Slint `1d3e702` 出貨 App 的 Skia software 與同一開發線的 release Dioxus／系統 WKWebView。Dioxus 在 `97c6b36` 以固定 Cargo target 重新核對建置，沿用 `cd64435` 的同一個 Mach-O。期間的產品來源差異限於 Slint 草稿元件。每輪各開新程序，使用隔離資料、1040×768 外窗、bundled 字型 23／20／100 及同一個立即回覆的本機合成 peer。視窗位置由系統決定。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 renderer ACK，中位數 | 5.71 ms | 57.45 ms |
+| 閱讀許可至首筆取頁派送，中位數 | 0.19 ms | 0.29 ms |
+| 首筆取頁至 837 行完整快取，中位數 | 520.79 ms | 530.39 ms |
+| 首筆取頁至全文 renderer ACK，中位數 | 530.46 ms | 558.48 ms |
+| 快取 PageDown，p50／p95 | 36.45／38.84 ms | 61.55／87.19 ms |
+| 快取 PageUp，p50／p95 | 36.36／38.26 ms | 39.51／86.36 ms |
+| 雙 GIF，10 秒程序族 CPU 中位數 | 0.946 秒 | 1.080 秒 |
+| 雙 GIF，程序族 physical footprint 取樣峰值中位數 | 122.13 MiB | 742.90 MiB |
+| 雙 GIF，程序族 RSS 取樣峰值中位數 | 380.09 MiB | 528.41 MiB |
+
+長文每版兩個有效樣本，各驗證 37 次取頁。每版各做 100 次原生 PageDown 及 100 次 PageUp。截圖核對第 1 行起讀，翻頁由第 28／23 行接讀，回翻都回到第 1 行。翻頁計時含 12 ms 按鍵、擷取與輪詢，renderer ACK 取各前端提交畫面的時點。一輪 Slint 首頁完成後失去前景，未派出首筆取頁，也未收到 Close ACK。排除後用同一出貨檔補跑通過。全文 ACK 中位數相差 28 ms，快取翻頁兩方向 p95 約低 55%。
+
+雙 GIF 每版交錯三輪，兩個 URL 各下載一次。同一份 512×160、32 幀、每幀 100 ms 的素材，暖機 1 秒後取 10 秒、101 筆程序族資源及 201 筆前景觀察。首尾均驗兩張圖換幀。Slint footprint 峰值中位數約低 84%，CPU 中位數約低 12%。個別 CPU 樣本為 Slint 0.625–0.982 秒、Dioxus 0.757–1.088 秒，兩版區間重疊。Dioxus 的 `dual_gifs` 綜合探針另外要求手動展圖與 PNG 匯出，本次自動展圖的效能劇本沿用實際換幀、HTTP、前景與退出條件，綜合探針仍記 `failed`。十個有效樣本都正常退出、收到 Close ACK 且 HTTP worker 已結束，雙 GIF 取樣中觀察到的程序身分也全部退出。
+
+這組數字涵蓋本機合成文章及雙 GIF。實站與其他平台的效能另待驗。重跑工具與原始證據在 `.local/verification/slint-article-arrow/arm64-reading/current-1d3e702/`，摘要為 `current-comparison.json`。已清除三個隔離暫存根及本輪原生控制器，保留候選與固定 Cargo target。路徑、磁碟觀測與保留項目在 `current-cleanup.json`。
+
+## 2026-11-14 最新候選長文、翻頁與雙 GIF 重測
+
+Apple M3 Ultra／macOS 15.7.7 沿用 Slint `cb4fbfc` 出貨 App 的 Skia software，以及同產品來源 `cd64435` 編譯的 release Dioxus／系統 WKWebView。兩份執行檔雜湊與上一輪一致，與當前 worktree 的差異只有文件。沿用 1040×768 外窗、bundled 字型 23／20／100、各輪新程序與隔離資料。視窗座標由系統決定。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 renderer ACK，中位數 | 5.77 ms | 59.09 ms |
+| 閱讀許可至首筆取頁派送，中位數 | 0.20 ms | 0.41 ms |
+| 首筆取頁至 837 行完整快取，中位數 | 530.95 ms | 524.77 ms |
+| 首筆取頁至全文 renderer ACK，中位數 | 541.04 ms | 555.49 ms |
+| 快取 PageDown，p50／p95 | 37.73／41.30 ms | 82.54／87.48 ms |
+| 快取 PageUp，p50／p95 | 37.32／39.54 ms | 39.96／87.99 ms |
+| 雙 GIF，10 秒 CPU 中位數 | 0.479 秒 | 0.663 秒 |
+| 雙 GIF，程序族 physical footprint 取樣峰值中位數 | 130.65 MiB | 730.46 MiB |
+| 雙 GIF，程序族 RSS 取樣峰值中位數 | 395.03 MiB | 521.55 MiB |
+
+長文依 Slint／Dioxus／Dioxus／Slint 跑四輪，每輪 37 筆取頁，各版每方向 100 次快取翻頁。截圖核對兩版首頁均從第 1 行開始，PageDown 各由第 28／23 行接讀，PageUp 回第 1 行。原生翻頁時間包含 12 ms 按鍵、視窗擷取及輪詢。首次取得前景的等待未固定，首頁 ACK 與全文 ACK 都是各自前端的提交觀測點。完整快取僅相差約 6 ms，全文 ACK 的差距方向與上輪 100 次測試相反。翻頁兩方向 p95 分別低 53% 和 55%。
+
+雙 GIF 沿用兩個 URL 各一次 GET、512×160、32 幀、每幀 100 ms 的本機素材。每版三個有效樣本，暖機 1 秒後各取 101 筆程序族及 201 筆前景觀察，首尾都確認兩圖換幀。一輪 Dioxus 未取得可量測主視窗，逾時後終止，已排除並單獨補跑。舊 Dioxus 探針包含手動展圖與 PNG 條件，此劇本以雙圖實際呈現、HTTP、資源與退出收據為準。有效十輪均正常退出並收到 Close ACK，雙 GIF 六輪所有取樣到的程序身分均退出。Slint footprint 峰值中位數低 82%，CPU 中位數低 28%。CPU 絕對值低於前次，與前次比較時仍有輪次及負載波動。
+
+本輪覆蓋 Apple Silicon 的本機合成資料、快取原生翻頁及雙 GIF 穩定前景播放。冷暖啟動、固定視窗位置、實站與其他平台仍需各自驗收。原始收據與重跑工具在 `.local/verification/slint-article-arrow/arm64-reading/`，比較及清理清單為 `retest-20261114-comparison.json`、`retest-20261114-cleanup.json`。已移除三個隔離暫存根及本輪的 `window-control`，保留收據、候選包與固定 Cargo 快取。
+
+## 2026-11-13 兩個最小化連線視窗的資源對照
+
+在同一台 Apple M3 Ultra／macOS 15.7.7 上，比較 Apple Silicon Slint `4d7d174` 和相容回退 Dioxus `82bc81f`。Slint 使用預設軟體繪圖，Dioxus 使用系統 WKWebView。每輪開兩個新程序，使用獨立測試 Bundle ID 與隔離設定副本。兩個程序連到不同的本機 TLS WebSocket peer，收到同一份合成 80×24 格線。先核對每個 1040×768 視窗中的第 1 與第 22 行，再透過 macOS 輔助使用介面最小化，讀回最小化狀態。
+
+按 Slint、Dioxus、Dioxus、Slint、Slint、Dioxus 交錯執行六輪。每輪兩組程序族各有 101 筆穩定樣本，共同取樣區間至少 10 秒，同序號的兩筆樣本最多相差 7.5 ms。每個程序另有 186–188 筆視窗狀態觀察，取樣期間均在背景且未重新顯示。兩組程序族的 PID 和啟動計數器均無重疊。Dioxus 每個程序族包含主程序、WebKit 的 WebContent／GPU／Networking 及 AudioToolbox helper。Slint 每組只觀察到主程序。
+
+| 同時最小化兩個連線視窗，三輪中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 兩組程序族合計 physical footprint 峰值 | 201.1 MiB | 932.4 MiB |
+| 兩組程序族合計 RSS 峰值 | 421.4 MiB | 897.6 MiB |
+| 兩組程序族合計 CPU 時間 | 8.31 ms | 95.78 ms |
+
+此負載下 Slint 的 footprint 峰值中位數低 78.4%。六輪的 12 個連線都收到唯一 Close 回覆，所有取樣到的程序均已退出，隔離設定及站點資料保持原樣。LaunchServices 未提供可觀察的數字退出碼。這組證據涵蓋同時最小化的已連線視窗，前景操作、雙開切篇、播放器與完整 S8 效能矩陣仍待驗。
+
+證據在 `.local/verification/slint-s8-multiwindow-current/`。可在同層新證據目錄沿用 `compare.py`、`WindowControl.swift` 與 `finish.py`，先執行 `compare.py setup`，再依上述順序傳入 `min01-slint:slint` 等唯一案名，最後執行 `finish.py`。本輪以既有候選與回退 App 複製並重簽，兩版主程式機器碼段均與原包相符。已清理隔離 App、設定副本與專用快取，共 384,802,954 regular-file bytes。實際路徑、磁碟觀測與保留項目在 `cleanup.json`。
+
+## 2026-11-13 現行候選前景閒置試跑
+
+從 Apple Silicon 候選 `4d7d174` 建立專用測試身分，核對主程式機器碼區段，再以一般入口及相同本機 TLS WebSocket 合成格線啟動。1040×768 視窗擷取核對第一與第 22 行標記，關窗收到唯一 Close 回覆。10 秒資源取樣區間的 182 筆視窗觀察均由其他程序占用前景，因此該輪標為 `not_ready`，前景比較仍待驗。
+
+結果、視窗擷取、前景記錄與清理清單位於 `.local/verification/slint-s8-foreground-bookmark-load/`。已移除隔離 App 副本與專用快取，保留候選及基準。
+
+## 2026-11-12 最小化背景閒置對照
+
+Apple M3 Ultra／macOS 15.7.7 的 Slint `4e28e82` 與相容回退 Dioxus `82bc81f` 各跑三輪。兩份 App 取自現有交付，隔離副本各有專用 Bundle ID 與 ad-hoc 簽章，主程式的 `__TEXT,__text` 各與原交付相同。由 LaunchServices 啟動後在同 PID 進入一般入口，Slint 用預設軟體繪圖，Dioxus 用系統 WebKit `20621.3.11.11.3`。兩版使用相同的合成 v6 設定、bundled 字型和本機 TLS WebSocket 格線，沙盒限制對外連線及一般產品資料。
+
+每輪先確認同螢幕 1040×768 的實際視窗擷取含第 1、22 行標記，再讀回原生最小化狀態。每輪取樣 10 秒，含 101 筆程序族紀錄與 183–188 筆視窗及前景觀察，全程沒有主視窗重新顯示或測試程序回到前景。Dioxus 取樣包含其 WebKit WebContent、GPU、Networking 及 AudioToolbox helper。Slint 在這段只有主程序。關窗後六輪均收到唯一 Close 回覆，全部取樣到的程序身分退出，隔離設定未改寫。LaunchServices 啟動的數字 exit code 無法從控制器取得。
+
+| 10 秒取樣，三輪中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 程序族 physical footprint 峰值 | 99.3 MiB | 680.1 MiB |
+| 程序族 RSS 峰值 | 211.8 MiB | 443.0 MiB |
+| 程序族 CPU 累計 | 4.37 ms | 81.94 ms |
+
+前置校準的 AX 視窗取得、選單列誤算、多螢幕座標偏移與最小化後立即讀回均有原始紀錄。Dioxus 另一輪可見視窗因桌面切換而失去前景，未列入表格。這組對照只覆蓋最小化且連線的穩定閒置區段。可見前景、冷暖啟動、媒體等其他負載及 S8 完整矩陣仍各自驗收。
+
+來源雜湊、六輪樣本、畫面、失敗與清理紀錄位於 `.local/verification/slint-s8-idle-current/`。可用該目錄的 `compare.py setup` 準備暫存副本，再以交錯順序傳入唯一的 `min*-slint:slint` 和 `min*-dioxus:dioxus` 案名。既有候選與回退 App 均未重建。六個專用暫存及快取路徑已清理，合計 192,242,446 regular-file bytes。磁碟可用空間觀測為 217,219,153,920 → 217,333,702,656 bytes，包含並行活動。確切路徑、保留例外與候選雜湊核對見 `cleanup.json`。
+
+## 2026-11-12 一般入口的 WebKit 程序對照
+
+在 Mac15,14、Apple M3 Ultra、macOS 15.7.7 上，用 Apple Silicon Slint 候選 `100b75f` 和 Dioxus 相容回退版 `82bc81f` 的一般入口。兩版使用相同的 v6 合成設定、隔離 HOME 和本機 TLS 1.3 WebSocket 格線。Slint 執行檔雜湊與 DMG 交付相符。Dioxus 副本改用獨立 Bundle ID 和 ad-hoc 簽章，`__TEXT,__text` 雜湊與回退包相同。沙盒封鎖外部 IP 連線及日常產品資料、Keychains 和原 App 的 WebKit 資料路徑。
+
+| 觀察 | Slint 候選 | Dioxus 回退版 |
+| --- | --- | --- |
+| 交付 App 直接連結 WebKit | 51 個 Mach-O 均無 | 主程式直接連結 |
+| 主程序 dyld 映射 | WebKit 與 WritingToolsUI 均有 | WebKit 與 WritingToolsUI 均有 |
+| 連線後各 16 筆程序族觀察 | 主程式、AppKit ThemeWidgetControlViewService | 主程式、WebKit WebContent／GPU／Networking、AudioToolbox SandboxHelper |
+
+程序歸屬依 macOS 的 responsible PID 和父子關係，另記 PID 與程序啟動計數器。兩版同一格線的本機 peer 都未收到站端輸入。Slint 原生視窗在另一輪擷取到第 1、22 行標記，這次 AX 樹讀取不完整，Dioxus 的 AX 觀察不可用。直接連結、OS 框架映射及 WebKit helper 各有獨立證據，這個時間窗沒有涵蓋所有功能或程序內實例。兩個程序族觀察以 SIGTERM 結束本輪專屬程序，未取得 WebSocket Close 回覆，所有取樣到的程序身分其後均已消失。
+
+前景比較因桌面切換且收到非預期輸入而排除，紀錄只保留非預期輸入的長度。可見背景與最小化重試未能穩定取得相同 Dioxus 視窗狀態。兩版的取樣只用來核對載入和程序，閒置 CPU／記憶體比較維持待驗。
+
+本機原始資料在 `.local/verification/slint-native-idle-current/`。以同一目錄的 `setup.py` 準備獨立 Dioxus 副本，編譯 `WindowControl.swift`，在自有系統暫存執行 `measure.py LABEL slint|dioxus TEMP dyld inventory`。保留直接連結、dyld、程序族和校準失敗紀錄。已移除 8 個專用暫存、工具與快取位置，共 44,193,050 regular-file bytes，詳細路徑及空間觀測在 `cleanup.json`。沿用既有候選、回退包及 Cargo target。
+
+## 2026-11-12 雙 GIF 前景校準
+
+以 Apple Silicon Slint 候選 `9c68e60` 的軟體路徑及同 worktree 的 Dioxus `22bd65d` 對照。重用固定 Cargo target，兩份隔離 App 各使用同一份 512×160、32 幀、100 ms 的 GIF 和同一合成文章，兩個網址各取一次。Slint 和 Dioxus 都顯示兩張完整置中的圖片。取樣以同一視窗的 1040×768 bounds、每約 50 ms 的前景 PID 觀測、10 秒程序族資源及正常退出為條件。
+
+Slint 校準中，兩圖都實際看到紅藍切換。195 筆前景觀測均指向該 App，101 筆程序族樣本合計 0.968 CPU 秒，footprint 峰值 143.0 MiB。首版驗證器將視窗提示一併算成主視窗，且用固定 200 筆判斷取樣完整，未走完正常退出。改驗 11 秒觀測覆蓋、最大觀測間隔與主視窗尺寸後，下一輪 195 筆均指向其他前景程序，該輪資源數字排除。Dioxus 兩張圖可展開，原生前景操作後仍顯示動畫暫停，無可比較的播放樣本。這輪結果供校準，配對效能仍待驗。
+
+最初 App 從 Documents 讀取測試啟動參數時被 macOS 拒絕，後改在自有系統暫存傳遞參數及合成資料。重跑程式、兩版來源雜湊、原始前景與程序族紀錄及失敗階段在 `.local/verification/slint-current-gif-comparison/`。校準結果記在 `calibration-summary.json`。
+
+## 2026-11-12 長文首筆取頁與前景控制
+
+Apple Silicon 用同一組字型與外觀設定、同一螢幕的 1040×768 外窗、同一份 38 頁／837 行合成文章及立即回覆的共用本機 peer。Slint 使用 Skia software，Dioxus 使用系統 WKWebView。兩組各以十對新程序交錯測試。兩版各自先在背景完成首頁的 renderer ACK，再由原生 AX 操作取得前景。第一組在首頁擷取和視窗位置確認後取得前景。第二組自控制器觀察到首頁入快取起，固定等待 750 ms 才呼叫原生啟用，以減少準備時間不同對共用連線時鐘的影響。四十次都核對 37 筆精確 PageDown、最終快取與 renderer ACK，以及嚴格 Close。固定等待組的首筆請求皆晚於 750 ms。
+
+| 固定等待組，10 次中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取 → 首頁 renderer ACK | 4.93 ms | 77.45 ms |
+| 各自閱讀許可成立 → 派送第一筆取頁 | 0.18 ms | 0.30 ms |
+| 觀察到原生前景 → 控制器讀到第一筆取頁紀錄 | 57.44 ms | 48.70 ms |
+| 第一筆取頁派送 → 837 行快取完整 | 262.44 ms | 242.07 ms |
+| 完整快取 → 最終 renderer ACK | 12.31 ms | 28.69 ms |
+| 第一筆取頁派送 → 最終 renderer ACK | 274.44 ms | 271.68 ms |
+
+各自閱讀許可指 Slint 的前景、欄位焦點及已確認 article scope，以及 Dioxus 接到 WebView 的閱讀許可後核准該 scope。第一筆「派送」記的是 Rust 交給 connection 前的時點，peer 另確認實收。原生前景到讀到紀錄包含控制器輪詢與 AX 回覆延遲。Renderer ACK 是前端提交畫面的觀測點，實際可見首屏以背景視窗擷取另存，沒有將 ACK 當成螢幕掃描時間。
+
+第一組從派送首筆到快取完整為 432.70／382.53 ms，兩版首次取得前景的準備時間不同。固定等待後差距從 50.17 ms 縮為 20.37 ms。peer 兩組記錄皆可見初段連續快速取頁，後段多數請求相隔約 16 ms，與共用連線 worker 的 frame publish interval 一致。這次保留實際的前景、焦點、站端與取消條件，沒有修改該時鐘。固定等待組從派送到最終 ACK 的兩版中位數相差 2.76 ms；實站負載、無等待的自然啟動、畫面呈現延遲與跨平台效能仍需各自驗收。
+
+這次使用 `166a87e` 加當輪探針變更。Slint 的標記長文探針改為被動啟動，普通候選的啟動流程相同。Dioxus 新增 `long_timing`，沿用原長文 fixture，無須操作媒體或 PNG 才能完成文字時序驗收。原 `long_load` 綜合 gate 仍要求圖片與 PNG。最後強化文字探針確認關閉自動開圖，修正版補跑一案通過，刻意啟用自動開圖的負例有展圖計數並得到 `failed`。兩案都完整取頁及嚴格 Close。
+
+最初 Slint 長文探針自行取得前景；Dioxus 的前景觀察器未運行 AppKit run loop，誤報未取得前景。兩次校準及簽章外部連結、缺少 loader run path 的臨時 App 錯誤均有原始收據。正式樣本使用被動 Slint 探針、可更新前景的 AppKit 觀察器，以及沿用候選 runtime 的簽章診斷 App。既有 837 行快速案例、20 頁慢速取消／繼續各另通過一次。
+
+另用兩個已載完 837 行的前景視窗，從 macOS 鍵盤事件來源送 PageDown 再 PageUp，逐張核對原生視窗擷取。Slint 在第 1–28 行後從第 28 行接讀至第 55 行。Dioxus 在第 1–23 行後從第 23 行接讀至第 45 行。兩版均保留上一頁最後一個完整文字列，且 PageUp 回到首頁。peer 各收到 37 筆取頁和 Close，快取翻頁沒有額外站端輸入。第一次以 PID 指定方式送鍵未看到文章移動，保留該組畫面；同一診斷 App 改用 HID 事件並核對前景後通過。Slint 的非整數尺寸、高圖間隙及末頁另通過 viewport 元件探針。
+
+本機證據在 `.local/verification/slint-native-reading-pair/`。從同一 worktree 的固定 Cargo target 建置兩個 release 診斷執行檔後，在同層新目錄放入 `WindowControl.swift`、`measure.py`、`matrix.py`。使用 `xcrun swiftc -O WindowControl.swift -o window-control`、`measure.py setup`、`measure.py setup-slint`，再執行 `matrix.py staged` 與 `matrix.py fixed`。控制器以 PID 及原生視窗限制操作範圍，需要 macOS 可及性與視窗擷取權限。來源 patch、執行檔雜湊、原始 traces、收據及產物清理位於同目錄。結案移除三個診斷 App、專用 WebKit 快取、暫存工具及 28 張逐位元重複 PNG，共 225,250,673 regular-file bytes。檔案系統可用空間的觀測差為 159,227,904 bytes。保留固定 Cargo 快取、各平台候選、獨特畫面及原始失敗。
+
+## 2026-11-13 cb4fbfc 長文、快取翻頁與雙 GIF
+
+Apple Silicon 使用 Slint `cb4fbfc` 出貨 App 的 Skia software 路徑，對照 `cd64435` 工作樹從固定 Cargo target 建置的 release Dioxus 與系統 WKWebView。兩提交之間只有文件差異。Dioxus 使用同一份 release Mach-O，放入隔離 App 並 ad-hoc 簽署。兩版用相同的合成資料、bundled 字型 23／20／100 與 1040×768 外窗。視窗位置由系統決定。主機為 Mac15,14、macOS 15.7.7。每輪用新程序及測試資料目錄。
+
+長文為同一份 38 頁、837 行的本機合成站，立即回覆。依 Slint／Dioxus／Dioxus／Slint 順序跑四輪，每輪核對 37 次取頁、完整快取、最後一次 renderer ACK、正常退出及嚴格 Close。首筆取頁從兩版各自的閱讀許可開始計時。首次取得前景的時間未固定。快取翻頁採原生 PageDown／PageUp，按鍵後輪詢單一視窗的文字區像素，含輪詢與擷取時間。每方向各有 30 筆。擷取文字確認 Slint 首頁從第 28 行接頁，Dioxus 從第 23 行接頁，兩版 PageUp 均回第 1 行。全程沒有多送取頁。
+
+| 長文指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取到 renderer ACK，中位數 | 5.60 ms | 56.24 ms |
+| 閱讀許可到派送首筆取頁，中位數 | 0.20 ms | 0.27 ms |
+| 首筆派送到全文入快取，中位數 | 512.52 ms | 533.53 ms |
+| 首筆派送到全文 renderer ACK，中位數 | 523.13 ms | 563.54 ms |
+| 快取 PageDown，p50／p95 | 21.88／24.33 ms | 71.02／74.52 ms |
+| 快取 PageUp，p50／p95 | 21.77／23.62 ms | 69.83／73.85 ms |
+
+雙 GIF 以同一份 512×160、32 幀、每幀 100 ms 的素材和同一頁測三組反序配對。啟用自動開圖，確認兩張圖完整顯示並各自切換紅／藍，固定暖機 1 秒後取樣 10 秒。每輪有 101 筆程序族資料與 201 筆前景 PID 觀察，兩個網址各一次 GET，結束後兩張圖仍會動。六輪均正常退出並有 Close ACK，HTTP worker 已 join，取樣到的 PID 與啟動識別均退出。
+
+| 雙 GIF 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 10 秒累積 CPU，三輪中位數 | 1.092 秒 | 1.193 秒 |
+| 程序族 physical footprint 取樣峰值，三輪中位數 | 130.54 MiB | 742.46 MiB |
+| 程序族 RSS 取樣峰值，三輪中位數 | 373.39 MiB | 527.98 MiB |
+
+三組 CPU 秒數分別為 1.092／1.193、1.005／1.193、1.219／1.064。Slint 的 footprint 峰值中位數低約 82%，三組 CPU 差距有波動。此輪只採計雙圖在前景播放的區間，隱藏／恢復與跨平台效能仍待驗。
+
+校準曾命中固定 Cargo target 裡的舊 Dioxus 執行檔，已在同一快取重編並核對雜湊。校準另修正 Dioxus 長文缺少本機素材參數，以及視窗未取得前景時的啟用方式，未達條件的輪次保留。Dioxus 原手動展圖／PNG 探針的整體狀態在自動開圖劇本仍為 failed。這個效能劇本逐案獨立核對實際雙圖、各一次下載、前景、資源與 Close，沒有執行手動展圖及 PNG 流程。
+
+原始資料、重跑工具、排除紀錄及清理清單在 `.local/verification/slint-article-arrow/arm64-reading/`。清理了測試 App、暫存素材、測試資料和已退出的取樣工具，保留候選包、原始收據及 Cargo 快取。
+
+### cb4fbfc 每方向 100 次快取翻頁
+
+沿用同一對執行檔與 837 行合成站。四個新程序依 Slint／Dioxus／Dioxus／Slint 執行。每個程序在全文完成後跑 50 組原生 PageDown／PageUp，每版共 100 次 PageDown、100 次 PageUp。每筆 PageDown 的文字區像素指紋都與該輪首次翻頁相同，每筆 PageUp 都與首頁相同。再從截圖核對 Slint 接到第 28 行，Dioxus 接到第 23 行。四輪各維持 37 筆站端取頁，均正常退出並收到 Close ACK。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 閱讀許可到首筆取頁，中位數 | 0.18 ms | 0.51 ms |
+| 首筆取頁到全文 renderer ACK，中位數 | 521.07 ms | 514.49 ms |
+| 快取 PageDown，p50／p95 | 36.82／39.38 ms | 81.30／87.68 ms |
+| 快取 PageUp，p50／p95 | 36.98／39.62 ms | 39.50／86.23 ms |
+
+兩版首筆取頁都在閱讀許可成立後 1 ms 內送出。兩次長文比較的全文完成差距方向不同。這輪兩個翻頁方向的 p95 都低約 55%。數據包含擷取、輪詢，以及兩版相同的 12 ms 按鍵按住時間，與上一輪 30 筆的絕對時間分開解讀。
+
+首輪控制器有前景 PID 但按鍵未使畫面翻頁，直接指定 PID 與調整視窗位置也未改善。改用獨立的事件來源、明確清除修飾鍵並保留 12 ms 按鍵時間後，兩版校準及四輪正式測試均通過。原始收據、畫面核對、排除原因及清理清單位於 `.local/verification/slint-article-arrow/arm64-reading/` 的 `comparison-100.json`、`matched-reading-100/` 和 `cleanup-100.json`。
+
+### cb4fbfc 雙 GIF 設定開關與恢復
+
+同一對執行檔、同一 GIF 與 1040×768 外窗。用 macOS ⌘, 開啟同窗設定的「General」，再按 Esc 回到文章。初始播放、設定覆蓋雙圖、恢復播放各暖機 1 秒、取樣 10 秒。四個有效程序每階段均有 101 筆資源樣本與 201 筆前景 PID 觀察。設定階段首尾影像均有 General 和 Close，且雙圖不可見。開啟前和返回後，兩圖各觀測到紅藍換幀。每輪兩個網址各 GET 一次，四輪正常關窗、收到 Close ACK，HTTP 及取樣到的程序均結束。
+
+| 程序／輪次 | CPU 秒，播放／設定／恢復 | 程序族 physical footprint 峰值 MiB，播放／設定／恢復 |
+| --- | --- | --- |
+| Slint 1 | 0.793／0.066／0.484 | 116.6／130.5／123.6 |
+| Dioxus 1 | 0.868／0.181／0.264 | 733.9／744.5／740.1 |
+| Slint 2 | 0.733／0.064／0.485 | 123.7／100.7／105.2 |
+| Dioxus 2 | 0.740／0.136／0.221 | 748.7／753.4／765.2 |
+
+兩版進設定時 CPU 均下降，恢復後兩次 Slint 的 CPU 都比本輪的 Dioxus 樣本高。恢復段中位數為 0.484／0.242 秒，與上一組單純前景播放的結果方向不同。每輪只開關一次設定，尚無多次切換的長期資源趨勢。畫面驗證涵蓋面板遮蔽及回到文章。Slint 舊有的動畫引擎測試另核對阻擋時播放器集合與下一幀計時清空，Dioxus 54 個 GIF 和文內圖片測試通過。
+
+一輪 Dioxus 未取得可見視窗，已排除並在下一輪延後啟用補跑。Dioxus 手動展圖與 PNG 探針在這個自動展圖場景的整體報告維持 failed。兩版效能收據各自核對實際雙圖、網路、資源與正常退出。個別階段及暫存清理在 `.local/verification/slint-article-arrow/arm64-reading/settings-comparison.json` 與 `settings-cleanup.json`。
+
+### cb4fbfc 雙 GIF 連續 12 次設定開關
+
+同一對 Apple Silicon 執行檔、1040×768 外窗及兩份自動展開的本機 GIF。Slint／Dioxus／Dioxus／Slint 四個新程序各做 12 次 ⌘, 開設定、Esc 返回。每次都確認設定覆蓋兩圖，回文章後再從兩張圖各觀測到紅藍換幀。設定開啟與恢復後各等待 350 ms，再取樣 1 秒，含 11 筆程序族資料和 21 筆前景 PID 觀察。
+
+| 程序 | 恢復後 footprint 峰值中位數，第 1–4 次 → 第 9–12 次 | 恢復後 RSS 峰值中位數，第 1–4 次 → 第 9–12 次 |
+| --- | ---: | ---: |
+| Slint 1 | 119.3 → 122.0 MiB | 349.8 → 483.6 MiB |
+| Dioxus 1 | 762.2 → 814.3 MiB | 607.5 → 732.4 MiB |
+| Dioxus 2 | 778.7 → 827.0 MiB | 605.8 → 743.1 MiB |
+| Slint 2 | 122.5 → 103.3 MiB | 408.1 → 481.4 MiB |
+
+兩版的 RSS 都隨開關增加。Slint 兩輪的 footprint 變化方向不同，恢復階段所有峰值介於 101.1 至 131.2 MiB。Dioxus 兩輪的 footprint 中位數皆增加約 50 MiB。RSS 會計入共用頁面，且這輪只量連續 12 次短間隔開關，尚不能定位增加的配置或判定長時間使用的趨勢。
+
+四輪合計 48 次開關均恢復播放。每輪兩個 URL 各只下載一次，正常退出並收到 Close ACK，HTTP worker 和取樣到的 PID／啟動識別均結束。Dioxus 既有報告仍包含這個自動展圖劇本未做的手動展圖和 PNG 要求。這輪獨立核對設定畫面、兩圖、下載與退出。原始取樣和清理清單保存在 `.local/verification/slint-article-arrow/arm64-reading/` 的 `repeat-settings-comparison.json` 與 `repeat-settings-cleanup.json`。
+
+## 2026-11-11 雙 GIF 三組交錯比較
+
+在 Mac15,14、macOS 15.7.7 arm64 上，以當時 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
+
+實際介面展開兩張全尺寸圖片，外窗擷取為 1040×768。採樣前後核對文章輸入焦點和紅藍畫面。Dioxus 的兩張 GIF 在背景可展開，進出全螢幕再點文章空白處後，恢復原窗尺寸和播放。Slint 用 Raise 及文章點擊，首輪另捲回文章頂端。Slint 文章 viewport 實際回報 1040×676，原彙整誤用了歷史 1040×740。Dioxus 圖片置中，Slint 圖片靠左，兩版頁尾與內部版面有差異。首段 Slint 0.287 秒缺少結束時的文章焦點證據，保留原始 trace。重新取得焦點後採用獨立的 `playing-focused` 區間，並觀察到兩張圖都切換紅藍畫面。
+
+| 配對 | Slint CPU 秒 | Dioxus CPU 秒 | Slint footprint MiB | Dioxus footprint MiB |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 0.296 | 0.180 | 127.4 | 700.4 |
+| 2 | 0.287 | 0.279 | 119.8 | 674.5 |
+| 3 | 0.388 | 0.171 | 125.9 | 686.7 |
+| 中位數 | 0.296 | 0.180 | 125.9 | 686.7 |
+
+每段 10 秒、101 筆，程序族成員穩定。相對這次 Dioxus 對照，Slint 取樣 footprint 峰值中位數低 81.7%，RSS 峰值中位數低 42.1%。CPU 中位數高 64.6%，三組配對差距為 64.6%、2.9%、127.5%，幅度有波動。六輪都各取得兩次 GIF GET、正常 exit0 和嚴格 Close，HTTP owner 均 join。Dioxus 另核對兩個 inline 請求／一個 batch、完整 23 行及 960×576 的原始頁 PNG。22 個觀測到的 PID／start 身分均已消失。
+
+第 5 輪在計時採樣之外執行五秒程序堆疊取樣。Skia render 的 131 筆包含 95 筆 softbuffer present、87 筆 `CGContextDrawImage`，其下可見 vImage 像素轉換。實際使用的 softbuffer 0.4.8 macOS backend 在 `present_with_damage` 直接提交整個 surface。後續效能工作可針對這段提交成本，再核對色彩、縮放、兩圖播放及閒置資源。
+
+原始資料、固定設定、執行檔 SHA、堆疊與可重跑控制器在 `.local/verification/slint-dual-gif-comparison/`。將 `compare.py` 複製到同層新目錄後執行 `setup`，逐輪執行 `run N`，以實際 App 操作展開及取得焦點，再從另一個終端執行 `sample N playing`。採樣後核對畫面並 Quit。Dioxus Quit 前匯出原始頁 PNG。兩個 controller 以 exit／Close、HTTP 次數與原始採樣結果保存驗收。清理移除六個自有根路徑共 110,849,788 regular-file bytes，七份 trace 無損壓縮後省 1,471,893 bytes。filesystem free 240004988928→240117846016 bytes 為觀測值。精確路徑、lsof、du、雜湊與壓縮映射見 `cleanup.json`。
+
+這組比較採相同外窗、可見雙 GIF 與端點焦點。連續前景、顯示延遲、冷暖啟動、100 次操作、GPU 記憶體及正式 S8 門檻仍待驗。
+
+## 2026-11-11 雙 GIF 在設定開關前後的資源
+
+重用同一 macOS arm64 機器、Slint `f50ffb46…`、Dioxus `4a3035b6…`、設定及兩個獨立 URL 的 512×160 GIF。按 Slint／Dioxus／Dioxus／Slint 順序，用四個新程序。每輪都在 1040×768 外窗展開兩張圖並取得文章輸入焦點，以原生 App 選單開設定的「一般」頁，點 Close，再取得文章焦點。各階段量 10 秒／101 筆，兩端確認畫面與焦點。設定在 Slint 是獨立視窗，在 Dioxus 是同一 WebView 的 modal；開設定本身也佔資源。
+
+| 輪次 | 程序 | CPU 秒，播放／設定／恢復 | 程序族 footprint 峰值 MiB，播放／設定／恢復 |
+| --- | --- | --- | --- |
+| 1 | Slint | 0.268／0.041／0.292 | 104.2／124.6／119.4 |
+| 2 | Dioxus | 0.200／0.097／0.182 | 683.5／678.6／677.7 |
+| 3 | Dioxus | 0.589／0.126／0.671 | 684.6／686.7／691.0 |
+| 4 | Slint | 0.570／0.131／0.911 | 120.0／133.7／138.4 |
+
+開設定後，相對各自開啟前，Slint 兩輪 CPU 分別少 84.6%／77.1%，Dioxus 少 51.7%／78.7%。四輪恢復後均看到兩圖紅藍換幀。每輪兩個 URL 各 GET 一次、正常 exit 0、嚴格 Close、HTTP join，所有觀測到的 PID／start 身分均消失。Dioxus 兩輪亦各有整頁 PNG 和既有 owner 清理收據。
+
+可見播放的 CPU 差距沒有固定方向。第二輪 Dioxus 相對第一輪多 0.389 秒，其中 WebKit GPU 多 0.137、WebContent 多 0.150、主程序多 0.103 秒。Slint 的 CPU 波動集中在主程序，第二輪關閉設定後的 footprint 峰值仍高於開啟前 18.4 MiB。這些差異待以固定暖機時間、連續前景觀測和多次開關追查，單次開關不足以判斷記憶體是否累積。
+
+最初以最小化為情境，但桌面工具仍能取得視窗畫面，缺少可靠的最小化觀測，未為該狀態取樣。Slint 第二張圖初次 AX 點擊未穩定展開，改用視窗中的可見箭頭並在開始前確認兩圖。Dioxus 兩輪以原生全螢幕往返後恢復文章座標操作，第二輪另遇截圖／座標工具錯誤，確認外窗與焦點才採樣。此批未量最小化、隱藏圖像的逐幀狀態、decoder 退休、顯示延遲或連續前景，仍屬 S8 的局部證據。
+
+原始紀錄、重跑控制器、每個程序的 CPU delta 和取樣資料在 `.local/verification/slint-gif-minimized/`。複製 `compare.py` 到同層新證據目錄，執行 `setup`，逐輪 `run N`，依上述原生操作在各狀態執行 `sample N playing`、`sample N settings`、`sample N restored`。Dioxus Quit 前匯出整頁 PNG。清理移除六個自有根路徑共 110,624,900 regular-file bytes，12 份 trace 無損壓縮省 2,572,895 bytes。精確路徑、保留雜湊及 filesystem free 觀測見 `cleanup.json`。本輪沿用現有執行檔與固定 Cargo target。
+
+## 2026-11-11 方向鍵到視窗呈現延遲
+
+在 Mac15,14（Apple M3 Ultra）、macOS 15.7.7、1920×1080 60 Hz 螢幕上，以 Apple Silicon Slint 候選 `99949409…`（`dbbce24`）對照同 worktree 的 release Dioxus `52ac086b…`（`9bd26fd`，含 `cc56bc4`）。兩版使用一般入口、相同的隔離設定、相同的 1040×768 視窗尺寸與位置。使用同一個 localhost TLS WebSocket peer，把 22 行合成終端內容填入 80×24 格線。兩版初始截圖中的終端內容一致，原生視窗的留白及浮球位置有差異。
+
+依 Slint、Dioxus、Dioxus、Slint 的順序，每次用新程序預先連線後按 100 次向上鍵。每次只送一個 OS 按鍵，peer 精確核對 `1b 5b 41`，以同一份合成格線交替回應紅、綠背景。收到預期顏色才開始下一次，按鍵前與觀察後核對前景 PID。以單一視窗的 ScreenCaptureKit `displayTime` 取得視窗伺服器呈現時間，和按鍵、peer 的 Mach 時鐘逐筆比對。所有呈現時間都晚於相應回覆開始，另記 capture callback 時間。這組觀測點在視窗伺服器，螢幕面板反應與持續前景未另量測。[Apple displayTime 文件](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
+
+| 量測（各 200 次） | Slint p50／p95 | Dioxus p50／p95 |
+| --- | ---: | ---: |
+| 按鍵到視窗呈現 | 37.35／42.06 ms | 37.33／54.67 ms |
+| 按鍵到 peer 收到資料 | 2.54／4.68 ms | 3.16／7.11 ms |
+| peer 開始回覆到視窗呈現 | 34.86／38.71 ms | 33.90／51.24 ms |
+
+兩輪按鍵到呈現的 p95 分別為 Slint 42.18／41.03 ms、Dioxus 54.67／54.53 ms。合併後此負載的 Slint p95 低約 23%，中位數相近。四輪各 exit 0、peer 回覆 Close 並 join，合成資料雜湊不變。這組結果只涵蓋已連線的合成終端重繪；冷暖啟動、快取翻頁／長文捲動、掉幀、同負載 CPU／記憶體與跨平台矩陣仍待驗。
+
+首輪小樣本擷取器在初始化 WindowServer 前中止，沒有計入。加入 AppKit／CoreGraphics 初始化後，兩版各 4 次小樣本通過，才跑正式四輪。原始 stderr、兩版初始畫面、逐筆 key／peer／capture ticks、硬體／來源及結束收據在 `.local/verification/slint-macos-input-latency/`。重跑時在同層新證據目錄使用保留的 `roundtrip.py`、`drive.py`、`native-ui.js`、`Capture.swift` 與 `summarize.py`。執行 `roundtrip.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`，用 `xcrun swiftc -O -parse-as-library Capture.swift -o capture` 建立擷取器。依次執行 `drive.py slint slint_1`、`drive.py dioxus dioxus_1`、`drive.py dioxus dioxus_2`、`drive.py slint slint_2`，再執行 `summarize.py`。視窗操作與擷取使用此 Mac 既有的 OS 權限。
+
+已移除 8 個自有測試位置，包含兩個 App 的暫存根、專用 WebKit／cache、編譯後的擷取器及未使用的操作腳本，合計 110,572,644 regular-file bytes。保留固定 Cargo target、候選包與量測證據。精確路徑、du、保留例外和並行可用空間在 `cleanup.json`。
+
+## 2026-11-11 一般入口啟動到可輸入
+
+同一台 Apple Silicon Mac、macOS 15.7.7、1920×1080 60 Hz，沿用方向鍵測試的 Slint `99949409…`、Dioxus `52ac086b…`、合成設定與 loopback TLS WebSocket 終端格線。每次建立新程序並使用一般入口。兩版保留實際啟動外窗，Slint 1000×718、Dioxus 1040×768，擷取同一螢幕中央 320×210 區域。此結果適用於兩版預設大小下的啟動，等尺寸啟動的影響仍待量測。
+
+每版各 10 組冷暖配對，前端順序 Slint／Dioxus／Dioxus／Slint 反覆五次。冷啟動清除本輪專用 bundle ID 的 macOS cache／WebKit／暫存位置，保持相同合成設定與已簽章的測試 App。緊接著的暖啟動重用上一程序退出後的快取。Slint 受測快取的常規檔案大小均為 0，Dioxus 暖啟動前均為 679,464 bytes。這個冷暖定義限於上述應用快取，OS／檔案頁快取保留。
+
+螢幕擷取先啟動並排除當時已存在的應用，再從呼叫 `open` 前開始計時。確認本機回覆後出現第一個紅色終端 frame，待其 ScreenCaptureKit `displayTime` 已到且測試程序取得前景，再送一個向上鍵。peer 核對唯一 `1b 5b 41` 後回覆綠色，擷取器確認畫面變化。40 次均正常退出、收到 Close ACK、peer join，設定與資料雜湊不變。以視窗伺服器呈現時間為觀測點，按鍵是否送出另由 peer 確認。[Apple displayTime 文件](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
+
+| 前端／快取狀態 | 開啟到終端可見 p50／p95 | 開啟到 peer 確認按鍵 p50／p95 |
+| --- | ---: | ---: |
+| Slint 冷 | 383.9／394.5 ms | 422.6／435.1 ms |
+| Slint 暖 | 378.9／388.5 ms | 415.9／425.9 ms |
+| Dioxus 冷 | 466.8／477.5 ms | 512.7／521.9 ms |
+| Dioxus 暖 | 457.3／472.2 ms | 501.6／511.3 ms |
+
+每組 10 次，nearest-rank p95 為該組最大值。此場景下 Slint 首屏 p50 約低 17–18%。開啟到 peer 開始回覆的 p50，Slint 冷／暖為 239.0／236.7 ms，Dioxus 為 369.3／358.3 ms。從回覆開始到畫面呈現的 p50，Slint 為 147.6／143.9 ms，Dioxus 為 99.3／102.0 ms。這是同一合成終端負載的分段結果，長文、媒體、其他平台與完整 S8 仍各自驗收。
+
+校準保留兩個失敗。控制器初次讀到 PID 時仍在 `sandbox-exec`，改為等同一 PID 執行目標程式；第二次在顯示器擷取模式發現畫面回呼可能早於 `displayTime`，改為同時等待兩者才送按鍵。兩版其後各通過一冷一暖校準，Dioxus 該次冷校準首屏 856.7 ms，保留在固定四十次量測之外。全部正式四十次均納入彙整。
+
+重跑用 `.local/verification/slint-macos-startup-latency/` 的 `Capture.swift`、`startup.py`、`matrix.py`、`summarize.py`，沿用同層方向鍵量測目錄的共用程式。於新證據目錄執行 `startup.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`，以 `xcrun swiftc -O -parse-as-library Capture.swift -o capture` 建立擷取器，再執行 `matrix.py` 和 `summarize.py`。原始 ticks、每次快取前後大小、執行檔 SHA、校準失敗與整理結果均保留。結案移除暫存 App／專用快取等 7 個位置，共 110,428,264 regular-file bytes，另記量測期間每次冷快取清除的 exact path。保留固定 Cargo target 與候選包，詳細資料在 `cleanup.json`。
+
+## 2026-11-11 837 行取頁與快取操作
+
+Apple Silicon 上沿用同一份 38 頁／837 行合成文章，兩個嚴格 peer 都只接受 37 筆 `ESC[6~` 和正常 Close。比較採既有明確選用的立即回覆模式。已完成快取及 renderer ACK 後，以原生方向鍵逐行來回，再用 PageDown／PageUp 翻頁來回。依 Slint／Dioxus／Dioxus／Slint 跑四個新程序，各 100 次逐行和 100 次翻頁。相同 1040×768 外窗、位置、字型設定與 60 Hz 螢幕。ScreenCaptureKit 逐筆核對裁切區的目標像素指紋，前景在按鍵與觀察點均核對。兩版頁首的單行操作均移動一行，翻頁依各自可見範圍移動 24 行（Slint）或 22 行（Dioxus）。校準保留前後畫面。
+
+| 場景 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 837 行完整快取，兩輪中位數 | 602.9 ms | 516.3 ms |
+| 完整快取到 renderer ACK，兩輪中位數 | 10.6 ms | 29.4 ms |
+| 快取逐行，200 次 p50／p95 | 38.1／42.6 ms | 38.3／73.6 ms |
+| 快取翻頁，200 次 p50／p95 | 37.9／42.5 ms | 39.5／75.0 ms |
+
+Slint 首頁入快取到第一筆取頁為 97–137 ms，Dioxus 為 5–18 ms。第一筆取頁送出到快取完整的兩輪中位數約為 486／505 ms。取頁與 renderer ACK 使用產品共用 `ReadingTiming`，快取操作使用視窗伺服器呈現時鐘。四輪都嚴格 Close、正常退出且量測時零媒體 HTTP。Dioxus 既有綜合 gate 另要求開圖與匯出 PNG，本次保留其未完成結果，文字範圍以 37 筆精確取頁、完整 packet、原生畫面變化和正常清理驗證。
+
+最初 Slint 的被動探針有前景且第一批 23 行已畫出，文章欄位卻未取得焦點，取頁維持暫停。當新文章 packet 在原生前景前安裝時，舊程式會更新授權 scope，後續因 scope 相同而略過焦點請求。現在保留待處理焦點，等真正取得前景且文章可操作再交付。修正未放寬焦點、modal 或站端請求條件。舊探針首輪用了普通視窗標題，後續另有工具點錯位置送出左鍵而被 peer 拒絕的負例。新 `--probe-store … --store-scene long` 沿用合成資料 marker、嚴格 peer 與完整產品服務，保留準備時的焦點狀態。原有每頁 500＋150 ms 的探針另通過原生小樣本，並保留原本取消與恢復測試。
+
+本輪 Slint 為工作樹修正版 `fd45a3ae…`，Dioxus 為既有 `52ac086b…`。兩個 macOS 固定下載包已另由乾淨 `c7368b2` 同步並完成封裝後回歸。[候選同步](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-macos-候選同步)原始資料在 `.local/verification/slint-macos-long-reading/`，包含來源差異、準備收據、各按鍵與 peer 時鐘、畫面及負例。重跑沿用固定 Cargo target 建置 `native-player-probe` 的 Slint 和 `desktop` 的 Dioxus，使用 `run.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`、`stage.py LABEL` 及 `xcrun swiftc -O -parse-as-library Capture.swift -o capture`。依序執行 `run.py slint slint_1`、`run.py dioxus dioxus_1`、`run.py dioxus dioxus_2`、`run.py slint slint_2`，再執行 `summarize.py`。共享的測試 App 建立及原生視窗操作程式在同層方向鍵量測目錄。Slint bin 測試 106 項通過、1 項 helper ignored，release all-target Clippy 通過。原本慢速 20 頁取消／恢復與文章輸入各正常退出、嚴格 Close。已清理七個自有測試位置與 20 張逐位元重複 PNG，共 115,151,402 regular-file bytes，保留固定 Cargo target、候選包及獨特證據。精確路徑、對應保留畫面、du 與可用空間觀測在 `cleanup.json`。
+
+## 2026-11-11 設定重複開關與按需繪製預覽
+
+同一台 macOS arm64、相同 1040×768 文章外窗及兩張 512×160 GIF。兩個現有 Slint 候選程序 `f50ffb46…` 各做 12 次原生「一般」設定開關，然後在同一暫存 App 換上修正後 `a243d3bf…` 的新程序重跑。每次確實進入 Settings 再回文章，採樣點確認雙圖及輸入焦點。每點取樣 5 秒／51 筆，下表使用末 31 筆的程序族中位數。原始峰值、RSS、CPU 與程序身分也保留。
+
+| 版本 | 記憶體指標 | 播放基準 | 首次開啟 | 第 1 次關閉 | 第 4 次 | 第 8 次 | 第 12 次 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 原候選 1 | footprint MiB | 92.3 | 110.3 | 114.3 | 114.6 | 116.2 | 117.9 |
+| 原候選 2 | footprint MiB | 90.5 | 109.3 | 111.8 | 114.7 | 117.8 | 120.6 |
+| 修正後 | footprint MiB | 98.0 | 98.1 | 99.5 | 103.6 | 110.0 | 106.9 |
+| 原候選 1 | RSS MiB | 333.1 | 369.2 | 388.0 | 406.5 | 408.4 | 425.7 |
+| 原候選 2 | RSS MiB | 344.1 | 374.9 | 386.3 | 411.2 | 419.6 | 427.7 |
+| 修正後 | RSS MiB | 348.5 | 361.0 | 372.8 | 385.2 | 391.8 | 399.5 |
+
+原候選的主要 footprint 跳升發生在首次開關。從第 1 到第 12 次，兩輪 footprint 再增 3.6／8.8 MiB，RSS 增 37.7／41.4 MiB，RSS 變動主要出在主程序。程式原來會在一般頁及搜尋時準備字型預覽。現在只有設定已開、外觀頁可見才繪製，關閉會釋放 preview renderer 和圖片，保留設定視窗本身供重用。修正版第 12 次的 footprint 低於兩輪原候選 11.0／13.7 MiB，但 RSS 仍隨開關增加。三輪依序執行且暖機基線有差異，現有結果不足以歸因全部差異或確認長期記憶體回收。
+
+首版用 Slint 的 property change callback 觸發預覽，設定與釋放案通過，但搜尋前往外觀的 Zoom Fit 焦點失敗，原候選同案通過。改成由分類切換、搜尋清空和結果導覽在排定焦點前明確更新。最終設定／搜尋／關閉待存三個完整探針都通過，搜尋包含兩種語言共 48 個定位。設定探針另核對隱藏預覽零配置、外觀預覽尺寸 576、關閉後無 renderer 或圖片、重開後重新繪製。實際視窗也在 12 次取樣後額外驗證外觀頁預覽與關閉重開，看到雙色字、字形與圖形，回文章後雙 GIF 仍切換紅藍。三輪均正常 exit 0、嚴格 Close、HTTP join，兩張圖各只下載一次。[Slint callback 文件](https://docs.slint.dev/latest/docs/slint/reference/language/callbacks/)
+
+原始證據在 `.local/verification/slint-settings-retention/`。用 `compare.py` 在同層新目錄 setup，執行 `run 1`、`run 2`，每輪照順序 `sample N baseline`、`open-01`、`closed-01`、`closed-04`、`closed-08`、`closed-12`。用固定 Cargo target release build，`stage.py` 在同一診斷 App 暫存改動後的 binary，再執行第 3 輪。首次焦點失敗、來源補丁、最終三個探針、Rust bin 106 passed／1 ignored 及 Clippy 各有紀錄。暫存 App 與專用系統 cache 已清理 68,892,153 regular-file bytes，18 份 trace 無損壓縮及 8 份相同 PNG 去重另有清單。兩個 macOS 候選包已納入此修正並通過各 23 項封裝後回歸。上述量測使用原先記錄的執行檔，舊 Apple Silicon 對照以 `arm64-f50ffb46-native.gz` 保留於 `slint-renderer-api-current/cross-current/settings-package-current/`。[候選同步紀錄](slint-evaluation-plan.md#2026-11-11-設定預覽修正的-macos-候選同步)
+
+## 2026-11-11 快照損耗待重畫狀態的修補
+
+在同一App重跑保留的 `4a4da212…` 失敗native，確認尚未展圖時頁尾、下方控制列已缺失，之後GIF換幀仍未補回；探針保存的 `snapshot.png` 卻完整。原 `ad01a6d5…` 對照則正常。重現前另發現上一輪把write_bytes產生的0644備份copy2回App，導致診斷副本無執行權限；本輪修回0755、核對access及簽章，實際原版啟動／退出也通過。這是診斷副本還原錯誤，四平台包未被修改；不能只核對binary hash而忽略mode。原始啟動失敗log另存，不算原生渲染案。
+
+根因已由反例驗證：在同一renderer上更新footer位置、於視窗repaint前呼叫 `take_snapshot()`，原發布版Skia使full／retained畫面不一致。Slint快照重用item trackers及dirty history，已把更新當成畫過，但獨立window buffer尚是舊畫面。先前118組測試沒有這個呼叫順序，因此不能重現。新增此順序後原依賴確實失敗；修補快照後標記完整window dirty並request redraw後，一般Slint／native-player兩配置的118組像素比較再次通過，後續100次動畫更新仍要求真正partial damage。這次沒有刪除快照或把準備／原生驗收降級。
+
+專案以Cargo path patch保存發布的Skia1.18.1來源及完整原授權；25份原始檔與發布crate逐檔核對，僅修改 `lib.rs`、`software_surface.rs`，新增 `software_shadow.rs`。前者維護snapshot／window正確性；後兩者只在macOS software保留一張私有BGRA前幀，成功後複製到CoreGraphics獨立target，尺寸／stride／錯誤失效、縮小釋放原配置。不修改shared registry，不改圖片大小／幀數／delay、不共用可變CGImage記憶體。來源SHA／VCS、改動及退役方式在 `vendor/i-slint-renderer-skia/PTTSTELLA-UPSTREAM.json`、`PTTSTELLA-PATCH.md`。這取代下節未採用的shadow-only實驗，舊拒用／失敗紀錄仍保留。
+
+最終native raw `7a78fcba…`／診斷 `43a2b2d9…`（aff5ac8 dirty、native-player-probe）以原launcher關閉診斷trace後驗證：CUA首次文章顯示已含頁尾／控制列，兩張512×160動畫、1920×1080全螢幕及1040×768還原、原生Settings開關及恢復紅藍相位通過；全螢幕往返後由實際Raise／focus恢復操作，沒有合成foreground許可。嚴格peer Close唯一一次passed，觀測PID＋start消失。HTTP兩URL各一次且正常join；第一個失敗版加原版對照另用同一server，各URL合計2次，皆Close通過。LaunchServices orphan仍無數值exit code。影像是原生CUA觀察，toolkit snapshot不冒充OS證據。
+
+同一最終native兩段各10秒／101筆CPU為1.103324417／1.099903833秒，physical footprint峰值104,666,944／107,583,296 bytes、RSS355,024,896／357,941,248 bytes。期間無CUA操作且沒有trace開銷；只算單輪校準，尚無完整交錯cold／warm、100次原生操作、OS顯示延遲或連續foreground，不以相較舊1.32–1.36秒計算正式改善比例。core392 passed／4 ignored、shadow2案、兩配置BIN各103／1、兩配置像素案、含vendor的native／一般all-target release Clippy及Python178案通過。額外實際notice collector已確認本地Skia未被跳過、三份上游license及兩份來源／修補說明逐byte一致；已修正所有無registry source套件被略過的錯誤，只排除本產品root，local path記相對位置。所有新建置沿用固定Cargo cache。紀錄位於 `.local/verification/slint-dual-gif-current/render-audit/native-repeat/`；四平台下載與S8完整判定尚未更新，S9未執行。
+
+依賴解析四target×兩配置8案、fmt／diff及docs21項回歸也通過；actionlint不在PATH，復用canonical checkout既有1.7.12工具通過，沒有重新安裝。GitHub Actions verify尚未針對未公開的本機變更執行。關閉／join全部本輪程序後，移除已被反例與修補驗證取代的 `render-audit/shadow/failure-native.gz`（34,055,533 bytes）及重複的 `native-repeat/fixed/rust-notices-check`（5,600,472 bytes）；先保留578筆notice inventory、5份notice的hash、失敗來源archive／logs與唯一原版ad01控制gzip。兩處resolved／UID／無symlink／lsof均核對，40份來源及交付保護檔hash不變。free264477679616→264520744960 bytes為並行觀測，logical／du分列於 `fixed/cleanup.json`。永久vendor來源、固定Cargo中間檔、當前診斷pair、四平台包及共享工具／SDK／使用者資料保留，沒有Cargo clean。下輪須重新配置loopback與create_new輸出，不能直接重啟過期診斷launcher；下一步更新真正候選包及來源交付，再做完整S8對照。
+
+## 2026-11-11 整窗重畫原因與未採用的 shadow 實驗
+
+後續已加入 `tests/slint_rendering.rs`，由正常Cargo整合測試直接使用本產品生成的 `TerminalWindow`／`ArticleViewport` 與Slint公開的Skia software surface API。兩個獨立window／renderer各有自己的緩衝：reference每幀age0全畫，另一個保留前幀並回報age1；沒有在同一renderer上另取snapshot而改變其dirty history。固定合成時鐘，逐像素比較BGRA；另用獨立指定的灰色footer及紅／藍圖片防止兩邊都空白仍誤過。一般核心／Dioxus測試不啟用此診斷；兩項直接optional依賴仍是原已選用的Slint1.18.1，只有明確開 `slint-renderer-audit` 才使用，未patch任何依賴或增加新repo。
+
+本機一般Slint及native-player兩配置各118組畫面完全一致，包含terminal→article、focus、載入框→圖片尺寸、重建／退休文章及圖片repeater、頁尾位置和下方控制列變動、100次雙圖換幀、1920×1080放大／還原，以及physical buffer不變時1.25／1.5／1.0倍率往返。每次暖機換幀另要求age1且damage小於整窗，確保不是拿兩個full repaint互比。這100次是合成model更新，不能算S8的100次原生輸入／翻頁或OS掉幀證據。兩配置每案執行約0.44／0.45秒，這是診斷測試wall time，不能算產品效能。
+
+上述對照**尚未重現原生App首次展圖的頁尾缺失**，因此不推翻下面的拒用結論，也未重新採用shadow或替換四平台包。它只縮小了已檢查的離屏情境；Rust owner在實際事件迴圈中的投影順序、window/presentation及瞬間輸入狀態仍需核對。初版Rc弱參照型別推導錯誤、早期成功但有unused DrawOutcome warning的log，以及後續嚴格成功版皆分開保存在 `render-audit/offscreen/`；沒有略過失敗。固定Cargo cache內重用同一套依賴及兩份必要測試執行檔，不建立額外App或測試repo。
+
+原兩種候選feature×四target的依賴選用8案、collector的5項Python測試、含native-player的audit all-target release Clippy、fmt／diff及docs21項gate回歸通過；依賴解析不算跨平台編譯。最終同來源 `cargo test … --no-run` 暖檢查wall0.401秒／Cargo0.34秒，沒有Compiling，測試exe前後SHA同為 `b563d689…`。兩份約31MB測試exe及固定cache（此時盤點6,225,580KiB）保留供後續重用；沒有新增過期App／解壓副本可清，不做Cargo clean。四份保護檔hash不變；本輪removed為空、free前後及cache／exe精確身分在 `offscreen/cleanup.json`，原始資料及範圍在 `offscreen/acceptance.json`。候選App仍為已驗 `ad01a6d5…`；Cargo整合測試的cache頂層CLI另列hash及執行過的Cargo配置，不能當已驗發佈包。
+
+沿用同一App pair、固定Cargo cache與雙GIF素材。先核對實際選用的softbuffer0.4.8 CoreGraphics、Slint Skia1.18.1 software surface及renderer來源，三個檔案均與本機保存的發布crate逐byte相符。CoreGraphics每次取得buffer都配置全新的零值像素、age固定0，`present_with_damage`忽略damage；Skia雖已開partial rendering，age0仍使其把整個視窗加入dirty region。這是目前依賴的實際路徑，不是缺少一個啟用partial rendering的環境開關；上游亦有[CoreGraphics提交研究](https://github.com/rust-windowing/softbuffer/issues/83)。
+
+以原已驗native `ad01a6d5…` 啟用上游 `SLINT_SKIA_PARTIAL_RENDERING=log`，CUA實際展開兩圖；192筆repaint紀錄、含最近40筆，均為100%。未重編原程式，沒有把log數當OS呈現幀數或CPU比例。唯一嚴格Close ACK通過、root PID消失、HTTP兩URL各一次且owner正常join。退出時一次CUA複合呼叫timeout，後續核對App inventory、peer receipt及PID確認終止，未因此重啟。
+
+接著在同一worktree用小型Cargo path patch試作macOS專用private BGRA shadow：保留最後成功畫面，尺寸／stride改變或render error時age0，其餘age1；完成後複製到softbuffer的獨立target，不改CoreGraphics持有的像素。非macOS及GPU路徑不變，額外保留一張視窗大小buffer。25份原始crate檔及授權以SHA核對後才實驗；兩個實際shadow測試和core392 passed／4 ignored，固定cache下release主程式建置54.94秒。首次選錯Cargo package feature參數被拒絕，改為同時選root與依賴後通過，沒有新建測試repo。離線update曾重新選部分依賴，立即還原，只留當時實驗所需的Skia path來源差異；最終Cargo.toml／lock已全部回復HEAD。
+
+實驗raw `1c01de96…`／staged `4a4da212…` 在雙圖暖機時通常只重畫21.29%，但**首次展開的實際CUA畫面曾缺頁尾／底列，左緣另有青色短線**。全螢幕往返後及開關原生設定後可恢復，不足以證明初始顯示正確；原因仍未定位，故整個patch未採用。另取恢復後10秒／101筆CPU1.149632709秒、footprint峰值126,048,576、RSS543,506,432 bytes；此輪開repaint log且先經fullscreen／Settings，不能和舊輪直接算改善。較早一段0.845429127秒區間與後續工具操作的交界未登記，排除比較。實驗生命週期的唯一嚴格Close及HTTP join通過，不等於畫面驗收通過。
+
+已還原原 `ad01a6d5…` native及原launcher並重新簽章，四架構交付包完全未替換。保留最小失敗native gzip34,055,533 bytes、完整實驗來源與授權tar97,391 bytes及小型設定／packet，供後續釐清dirty invalidation；不留下第二套App。原始紀錄與拒用理由在 `.local/verification/slint-dual-gif-current/render-audit/`。移除 `/Users/ladesine/Documents/Github/PTTStella-slint/vendor/i-slint-renderer-skia` 與該證據根的 `baseline-native` 重複副本前，核對resolved／UID／無symlink／lsof、逐檔archive byte equality及6份保護檔SHA。free265846763520→265915838464 bytes僅為並行觀測，exact inventory見 `cleanup.json`。固定target及可重用中間檔保留，未Cargo clean；cache頂層raw仍是拒用實驗，須經正常Cargo依目前來源重建才可另作驗收，不可把檔名當來源身分。下一步不重做相同age1實驗；先定位實際像素失效，或評估能明確保證dirty／presentation語義的上游方案。S8仍not_ready，S9未執行。
+
+## 2026-11-10 GIF 循環重用與剩餘繪製成本
+
+接續同一對診斷App、固定Cargo target、marked store及 `47c975f3…` 雙GIF素材，沒有另建repo或整套環境。先用原R3 native `69c32791…` 重測，10秒／101筆CPU3.664067167秒，footprint峰值97,277,696 bytes。其後另用系統 `sample PID 5 1 -file OUTPUT` 取堆疊，沒有開TextEdit；profiler區間不計入前述資源數據。樣本同時出現media Playback→GIF／weezl解碼，以及主執行緒Skia software／softbuffer CoreGraphics present／vImage色彩轉換。這是執行緒狀態抽樣，不把含sleep的stack次數當成CPU百分比。
+
+已在共用Playback加入[有界循環快取](media.md#slint-候選的-gif-循環快取)。首次完整逐幀解碼、合成與驗證EOF後才跳過重複LZW；每個播放者至多16MiB唯一RGBA，逐幀保留delay，像素相同可共用buffer，hash碰撞仍完整比對。超額退回原增量路徑；暫停、自然結束或停止釋放不再需要的循環。沒有變更來源512×160、32幀、100ms與兩圖可見條件。
+
+修正後的raw `f359050a…`／診斷 `bb2322aa…`，真實建置為f48e7e4加保存patch。相同設定／runtime／原生焦點／游標及完整16服務下，取得兩段連續10秒／101筆，然後另外做5秒stack取樣：
+
+| 修正後狀態 | CPU seconds | footprint峰值 bytes | RSS峰值 bytes |
+| --- | --- | --- | --- |
+| 播放 | 1.930350334 | 100,341,696 | 377,225,216 |
+| 接續暖機 | 1.867000249 | 103,421,888 | 380,305,408 |
+| 另一新程序：開關設定後恢復 | 1.705098042 | 109,680,192 | 405,078,016 |
+
+暖機stack樣本未再取到GIF／weezl解碼，仍有Skia render與CoreGraphics present／vImage。這支持先前的重複解碼成本已降低；剩餘UI提交仍需處理，CPU仍高於前輪Dioxus0.745–1.15秒，沒有宣稱S8通過。單輪與不同程序的波動、literal URL port、版面／foreground及OS呈現限制沿用前節，不能以此計算正式平替改善比例或OS掉幀。
+
+最終Clippy將同一整除判定改用is_multiple_of後，raw hash為 `9524b6d6…`／診斷 `ad01a6d5…`，另以這份最終native重跑，兩段10秒／101筆CPU分別1.319630750／1.355970584秒，footprint峰值107,157,376／106,207,104 bytes，RSS417,873,920／416,923,648 bytes。兩圖、設定開關、恢復紅藍相位、文章焦點、嚴格Close及全數觀測身分退出皆核對；HTTP兩URL各一次，恢復未重抓。與中途1.87秒的波動尚未定位，不能歸因於Clippy修整或拿最佳單輪計算正式改善。精確binary、設定、時間與來源核對在 `profile-after/accepted/`。
+
+實際重跑也發現被動準備誤用article_reading_ready（包含原生焦點權限）。現在只核對原始frame、已ack且完整的閱讀packet與widget啟用；準備報告實見foreground=false、ready=false仍能prepared，未合成前景。後續由CUA原生Raise／文章點擊取得焦點及展開兩圖。正式輸入、組字、失焦與原始bytes准入未由此放寬。
+
+第一個完整播放／取樣程序因手動檢視超過既有Surface peer300秒期限而斷線，log為loopback probe timed out，不能列為正常退出通過；其資源取樣與stack在期限內，失敗與畫面保留。另以同一binary／store快速重跑：兩GIF展開、開關設定、恢復紅藍相位與文章焦點、⌘Q，唯一嚴格Close ACK passed，全部觀測PID＋start消失。共兩個真正載圖程序對兩URL各2次GET，恢復未重抓，HTTP owner正常join。numeric exit仍未由LaunchServices orphan觀測。證據分列於 `slint-dual-gif-current/profile-before/`、`profile-after/final/`、`profile-after/lifecycle/`，不合併失敗與成功生命週期。
+
+最終兩種Slint配置各103 passed／1 ignored，包含六項循環快取案例；兩配置all-target release Clippy通過。初次Image clone編譯錯誤與is_multiple_of lint失敗另存，沒有放寬檢查。更新文件與fmt不另重建Rust。已移除 `/private/tmp/pttstella-dual-gif-profile-kpsokzuu` 及 `slint-dual-gif-current/profile-before/baseline` 的舊68,604,528-byte native（Frameworks symlink不跟隨刪除），臨時根另94,665 bytes；兩者均先核對UID／resolved／lsof與inventory。3,244份保護檔hash不變，free266199617536→266268336128 bytes僅為並行觀測；exact paths／du／保留理由在 `profile-after/cleanup/ledger.json`。固定Cargo cache、最新診斷pair／素材、必要舊基準與唯一未解證據、四平台下載、來源及共享工具／使用者資料保留，未執行Cargo clean。接續重跑須先重設過期的loopback origin／runtime與新evidence；S0–S8仍持續，S9未執行。
+
+## 2026-11-10 共用雙 GIF 負載與 CPU 反例
+
+新增兩版共用的 [閱讀頁面](../src/replay/media_benchmark.rs)：23行、完整1/1頁、兩個獨立loopback GIF網址，由同一Rust格線reducer處理。來源只接受明確 `http://127.0.0.1:PORT` origin，拒絕遠端、帳密、path／query／fragment和控制字元；正常Live不使用此來源。Slint以marked-store的 `--store-scene gifs` 掛載與Live相同16項服務；準備檢查核對原始站端frame、已ack的完整閱讀packet及實際article widget，不再錯用web模式下不存在的terminal bitmap presentation。準備timer完成即停止，不合成focus、展圖、輸入或自動退出。
+
+素材由既有CC0標準函式庫generator產出：512×160、32幀、每幀100ms、紅藍交替／無限循環，encoded1,974,503 bytes／SHA `47c975f33f5bfeac5d9cc7b11cc0eb8d90b5d240ba8d00e14b1d361b9dc094f4`。每圖2,621,440 frame pixels，兩圖5,242,880；不是最大GIF成本或瞬間峰值測試。舊generator四種入口產物逐byte不變。原先直接與tracked PNG比較失敗，舊generator本來就有不同encoded PNG；未修改原fixture或expected，改核對old／new generator輸出，失敗另保留。
+
+重跑素材與HTTP owner（輸出目的地須不存在）：
+
+```text
+python3 tooling/generate_media_fixtures.py --dual-gif /ABS/owned.gif
+python3 tooling/desktop_media.py --dual-gif /ABS/owned.gif --output /ABS/new-http
+```
+
+從 `new-http/ready.json` 取origin。結束時建立該目錄的 `stop` 檔或Ctrl+C，`result.json` 保存逐路徑count與join；20分鐘未結束為timeout，不算通過。獨立CLI已實際驗兩個URL的完整SHA／各一次GET與正常join，未使用UI driver。兩版原生參數如下，採相同marked synthetic settings：version6、bundled字型23／20／100、en-US、web閱讀、auto-expand off；`STORE` 含明確 `.store-compatibility.json` marker。完整實際設定bytes、marker與SHA在本輪證據，不能以使用者一般store代替。
+
+```text
+pttstella-slint --probe-store NEW_EVIDENCE STORE --store-scene gifs --media-origin ORIGIN
+pttstella --probe-surface NEW_DIOXUS_STORE dual_gifs --media-origin ORIGIN
+```
+
+兩版在同一worktree／固定Cargo target建置，沒有另建測試repo；診斷App沿用同PID LaunchServices launcher。Dioxus為目前共用核心的對照，並非最初5ea9ad6。R3 raw Slint `79bdaa59…`／診斷 `69c32791…`，Dioxus raw `2c903bab…`／診斷 `4a3035b6…`；真實來源3c667eb加保存patch，沒有倒填為後續乾淨commit。Cargo驗證後target頂層Dioxus binary hash改變，原因未獨立定位；已測診斷App的兩份native hash均不變，記於 `post-gate-binaries.json`，未用新binary替換採樣身分。
+
+CUA實際點兩個箭頭，兩張512×160同時可見，分別觀測到紅／藍相位；首尾焦點回文章輸入，播放／恢復採樣的游標在標題列(520,13)。外視窗均1040×768；Slint左靠排圖並保留原footer，Dioxus置中且投影可視行，未宣稱viewport／OS raster完全相同。開設定、關設定後確認兩圖恢復，再⌘Q正常關窗。各狀態10秒／101筆穩定程序族結果如下；paused列為開啟設定的應用整體，兩版設定面板尺寸／實作不同，只供各自前後對照。
+
+| 前端／狀態 | footprint峰值 bytes | RSS峰值 bytes | CPU seconds |
+| --- | --- | --- | --- |
+| Slint software／兩圖播放 | 98,276,864 | 368,459,776 | 3.603962167 |
+| Dioxus／兩圖播放 | 733,376,192 | 554,745,856 | 1.149564664 |
+| Slint／設定開啟 | 120,722,944 | 409,092,096 | 0.209669166 |
+| Dioxus／設定開啟 | 751,234,816 | 594,083,840 | 0.462977875 |
+| Slint／恢復兩圖 | 123,180,608 | 430,800,896 | 3.504497416 |
+| Dioxus／恢復兩圖 | 753,299,264 | 595,001,344 | 0.745315333 |
+
+**此雙GIF負載下已觀測到Slint CPU成本較高，不能只以低記憶體判為可平替。** 尚未定位是解碼、UI重繪或其他成本；下一步對同一native與素材取樣hot stacks再最佳化，不先降低幀數、可見圖數或解析度。這只是單輪校準：沒有連續OS foreground、完整cold／warm／交錯重複、100次操作或OS顯示延遲，不能計算S8達標比例。開設定時主圖不可見，這些GUI觀察亦沒有獨立數出decoder退休；worker准入／釋放由既有生產owner測試另證，反覆開關後回收與瞬間下載／decode峰值仍待驗。
+
+同一HTTP owner共三個實際程序取圖（Dioxus首輪、Slint R3、Dioxus R3），兩路徑各3次GET；設定開關／恢復沒有重抓，server正常join。Dioxus R3核對23行完整閱讀、兩次顯式請求／一個batch、原始PNG、surface／owner audit及Close；Slint R3準備報告核對16服務／閱讀ack，最後唯一嚴格slint_full_dual_gifs Close ACK passed。最後觀測的全部PID＋start消失。LaunchServices orphan主程序的numeric exit未觀測，不記exit0。原始log／trace／設定／來源與失敗在 `.local/verification/slint-dual-gif-current/`；raw缺rpath的dyld失敗、web準備條件失敗、首輪Dioxus漏計新case的failed audit與編譯錯誤均保留，沒有放寬原expected。
+
+已核對無open files後移除 `/private/tmp/pttstella-dual-gif-q2lzq45q`（regular-file logical214,712 bytes／du256KiB），小型結果先逐檔核SHA保存在 `native-evidence/`；3,058份保護檔hash未變。free266962845696→266963103744 bytes僅為並行觀測，exact path／resolved／UID／lsof／inventory見 `cleanup/ledger.json`。兩份當前診斷App、同一2MB素材及其精確OS namespace保留供尚未完成的CPU profile重用，不另留各階段App；舊一次性store及probe輸出已移除，重跑前須重新配置明確loopback origin與新evidence，不能直接重啟過期launcher。固定Cargo cache未clean，本次cleanup時du4668044KiB；後續core gate仍沿用同一target且開啟dev／test增量。最新四平台下載、來源／最小基準、共享工具及使用者資料保留，Slint worktree尚未整合。
+
+本批core gate14命令／2個replay passed；native-player的lib392 passed／4 ignored、Slint bin97／1；desktop的lib379／4、bin121／1、多程序10／1；一般Slint bin97／1。native-player／一般Slint／desktop三配置all-target release Clippy、fmt、JS383與Python177通過。獨立server CLI另實際核對兩次完整payload SHA與正常join。文件gate通過；這些驗證不等於動畫CPU問題已修或S0–S8完成。
+
+## 2026-11-10 同程序啟動與原生焦點校準
+
+本輪不重編Rust，重用目前arm64候選與既有2846dc4 Dioxus對照。診斷App改由LaunchServices啟動RunFixture，再以 `os.execve` 於同一PID執行native，不再由Python另spawn主程式。兩者都觀測到PPID1／responsible等於自己的PID；Dioxus的WebKit GPU／WebContent／Networking及ThemeWidget依responsibility歸入，Slint則含native與ThemeWidget。原生CUA現在可在Dioxus點擊標題列、座標點浮球、按Escape關閉選單並返回終端焦點，未再出現前輪noWindowsAvailable。此結果支持使用同PID啟動繼續量測，尚未單獨證明前輪故障的唯一原因。
+
+證據在 `.local/verification/slint-foreground-current/`。兩版設定SHA相同，bundled Cascadia Mono／Noto Sans CJK TC、23／20／100、en-US、hover off；相同80×24內容及1040×768含標題列外視窗，游標固定標題列(520,13)，首尾CUA終端焦點／Escape有原生證據。Slint prepared另證明16個服務、1040×740 viewport／1040×624 grid、scale1／zoom1；Dioxus幾何由實際screenshot核對，沒有機器viewport receipt。兩版OS字形／baseline並非pixel-identical，未把相同名義尺寸當成所有光柵細節相同。
+
+| 程序／預設renderer | 10秒／101筆footprint峰值 bytes | RSS峰值 bytes | CPU seconds |
+| --- | --- | --- | --- |
+| Dioxus同PID對照，原生輸入可用 | 642,592,384（約613MiB） | 466,550,784 | 0.370350541 |
+| Slint無renderer旗標，macOS software | 93,230,720（約89MiB） | 283,148,288 | 0.192464708 |
+
+此為單輪閒置校準，沒有連續記錄整段OS foreground，未控制／重複cold與warm；不能計算S8達標比例。首輪Dioxus游標仍在浮球上，另有101筆／0.536860208秒CPU，完整保留但不混入表列條件。Slint首個座標點浮球未展開，改用AX點擊後原生Escape成功，原始未變狀態也保留為待查操作觀察，未宣稱所有pointer矩陣完成。
+
+Dioxus產品來源native `948d2a9e…`，重新ad-hoc簽名後 `fd52aa8d…`，仍不是最初5ea9ad6基準；Slint封裝來源 `08cb87df…`，診斷重新簽名後 `dd3a0d4e…`，產品來源核對09a13da，實際原建置8f40e47加R4 patch不變。Dioxus診斷App deep-strict通過；Slint診斷App因外部Frameworks symlink而deep-strict失敗，standalone native strict通過，未當成可分發App。產品四包未改。
+
+CUA明確匯出Dioxus全頁PNG，960×576／SHA `1e25a773…` 逐byte等於前輪原生輸出；Slint source PNG亦為960×576／既有 `294df2bb…`，兩種renderer輸出各自核對，未宣稱彼此bytes相同。Dioxus surface／owner audit passed、connection／credential／file worker join、cleanup完成；Slint唯一嚴格slint_full_parity_grid Close ACK passed。兩版均用CUA⌘Q結束，全部觀測PID＋start消失；LaunchServices啟動的orphan主程序無可wait的parent，numeric exit code未觀測，沒有記成exit0。IMK mach-port訊息仍保留，不推定IME結果。
+
+已清理兩份診斷App、單一暫存資料根及五個精確自有OS cache／WebKit／暫存namespace，合計110,801,856 regular-file logical bytes。exact八條resolved路徑、UID／symlink／lsof、inventory／du及free270185943040→270296879104 bytes在 `cleanup/ledger.json`；free僅為並行觀測。首輪preflight將系統 `/var`→`/private/var` ancestor alias當未知差異而停止，未刪檔；明確核對後用resolved exact path接續，失敗另存。3,037份保護檔hash不變；只留小型來源／啟動器metadata、結果與trace。固定Cargo target／worktree、最新候選、原始對照、來源交付與使用者資料保留，未執行Cargo clean。下一步補雙GIF／混合負載、相同顯示觀測點及完整次數，S8仍not_ready。
+
+## 2026-11-10 macOS 預設軟體合成與影片尺寸
+
+本輪來源將 macOS 的無旗標路徑改用 Skia 軟體合成及既有原生 CPU 影片 worker。Windows／Linux 的 Auto 選擇保持原邏輯；`SLINT_BACKEND` 仍可覆寫，另可明確指定互斥的 `--software-renderer`、`--opengl-renderer`、macOS `--metal-renderer`。Metal UI 必須在 mount 前選定 CPU 影片：首輪三格式都停在 Ready／offer 尚未被接手，未發 HTTP；修正後三案通過，沒有放寬就緒或像素條件。預設切換僅發生在 Slint 候選，不切換正式 Dioxus 入口。
+
+同時移除 CPU 影片既有720p上限，與 GPU 共用8192邊／16,777,216像素預算，超出才等比縮小。沿用單一 latest frame、有界通知及 worker 退出；依實際 view 配置，閒置不預配最大 buffer。新增獨立 expected 檢查 Full HD／4K 保持尺寸、超大正方形縮為4096×4096、越界拒絕，以及3840×2160四角 RGB／alpha255和完整 frame 長度。這是實際生產 buffer／轉換測試，尚非4K影片播放速度、4K顯示器或原生音訊驗收。
+
+證據在 `.local/verification/slint-renderer-api-current/`。R4 raw為 `d1fd308f…`，使用既有50庫閉包的診斷 native為 `c8eeab19…`；確切hash、來源8f40e47加patch／351份fingerprint、各revision及命令分開保存。前一輪的同機／字型條件延用，M3 Ultra／256GiB／macOS15.7.7。無 renderer 旗標的完整16-owner視窗、viewport1040×740／grid1040×624，在原生 CUA terminal focus首尾可見下完成10秒／101筆穩定採樣：footprint峰值104,027,712 bytes（約99MiB）、CPU0.207124876秒，RSS峰值260,440,064 bytes。先前 OpenGL 842–845MiB與明確Metal R1校準約574MiB分列，不宣稱已達S8的兩版改善門檻或證明所有機型相同比例。
+
+同一R4實際視窗以原生 `⌃⌘F` 進1920×1080全螢幕，再回1040×768（含標題列），terminal focus保留；兩張 screenshot 在CUA紀錄，沒有另存副本。返回後 family footprint74,061,888 bytes；vmmap主程序57.1M、圖形IOAccelerator resident16K。正常關窗exit0／唯一嚴格Close ACK，最後觀測的PID＋start全數消失。沒有用本輪推定實體IME或F11矩陣完成。
+
+R4無旗標的MP4／WebM／OGV三案、837行／37次取頁長文、PNG／單GIF、文章輸入與貼上共七案皆exit0／嚴格Close，影片核對CPU render_path、四色、暫停／seek／失焦、render退休及session join；HTTP workers全部joined。固定960×576的source PNG與三API控制逐byte相同，仍為 `294df2bb…`。雙GIF峰值、100次操作／cold與warm重複、OS顯示延遲及Dioxus原生前景條件仍須補齊；單GIF案例沒有擴大標成雙GIF。
+
+另以沒有Slint／Skia／媒體或視窗的自製CGL程式定位成本：context current約5.9MB，第一次清除1040×624 FBO後主程序峰值457,721,408 bytes，vmmap圖形392.2M；destroy context後約7.2MB。紅色pixel `[255,0,0,255]` 獨立核對、exit0，原始碼／trace／vmmap在 `slint-gl-allocation-audit/`，臨時exe已清理。此反例證明部分圖形成本不需要Slint快取才會出現，並未定位或宣稱修復driver洩漏。
+
+本輪Rust native library390 passed／4 ignored、兩種Slint配置各97 passed／1 ignored，兩配置all-target release Clippy、fmt、Python177項通過。首輪Metal三案failed、fixture App因外部Frameworks symlink而deep-strict失敗及後續未啟動的runner錯誤均保留；standalone native strict通過，正式封裝仍要求完整閉包及原strict gate。R4正式arm64 native為 `08cb87df…`，封裝與清理結果如下；此處不把診斷wrapper當可分發App，也不把測試通過當S0–S8完成。
+
+正式arm64 App／ZIP逐檔1234個payload一致，50庫與202份既有notice未變，另保存一份舊runtime manifest receipt；App deep-strict及DMG驗證通過。封裝native在拒讀Homebrew的sandbox重跑上述七案，加明確software／OpenGL／Metal格線，共十案通過；自動toolkit操作沒有擴大標成OS鍵鼠或S8效能。最初notice collector錯把合法receipt當額外檔案的失敗保留，修正為核對舊manifest原bytes，未修改封裝內容。
+
+依使用者最新指示，保留同一worktree及既有3298516KiB Cargo target；忽略於Git的 `.local/slint-build.toml` 固定指向此cache，dev／test增量開啟、debug0，release不變。同來源warm release wall0.668157292秒／Cargo0.61秒，沒有Compiling、raw SHA完全相同；證據為 `cache-reuse.json`。不再每批full clean；只有來源還原等必要驗證另建隔離checkout。
+
+本輪清理五項：`slint-renderer-api-current/Stella Renderer Lab.app`、`/private/tmp/pttstella-renderer-api-4jmita6y`、同批 `restores/`、舊 `slint-ui-cjk-fallback/arm64-package`（改symlink至新包），及 `/private/var/folders/nd/qb7hn9s118qd524df0l6j1rm0000gn/C/io.github.yam276.pttstella.slint.storefixture.rendererapi`。先核對UID／resolved／symlink／lsof，暫存的非fixture結果複製後逐檔核SHA；共3,025份保護檔hash及cache exe不變。selected regular-file logical bytes合計515,133,931，du分列於 `cleanup/ledger.json`；filesystem available269875634176→270397325312 bytes僅為並行觀測，不全歸因本批。Cargo clean未執行；最新四包、來源／最小基準／唯一失敗證據、使用者資料及共享SDK／registry／VM保留，Slint worktree尚未整合，S0–S8持續。
+
+## 2026-11-10 閒置格線校準與圖形記憶體
+
+新證據在 `.local/verification/slint-perf-equivalence-current/`，機器為 Apple M3 Ultra／256GiB RAM／macOS15.7.7，不能外推其他機型。沿用已封裝的 arm64 Slint native `6841e17e…`，沒有修改或重建 Rust；以獨立 host、responsibility root 和自有 marked-store 執行。兩版設定 bytes 相同：內建 Cascadia Mono／Noto Sans CJK TC、字高23、基線20、字寬100、en-US、hover off，完整 owner 保留。CUA 實見相同格線內容與顯示尺寸；Slint prepared report 為 viewport1040×740、grid1040×624、scale1／zoom1及16個服務存在。Dioxus 的相同顯示幾何由 screenshot 目視，沒有冒充機器讀取的 viewport receipt。
+
+每輪在畫面就緒後進行10秒／101筆穩定程序族採樣，之後正常關窗。下表是校準原始觀測，**不構成兩版效能勝負**：
+
+| 程序／renderer | 取樣 footprint 峰值 bytes | 取樣 RSS 峰值 bytes | CPU seconds／約10秒 wall |
+| --- | --- | --- | --- |
+| Slint 預設 Skia OpenGL，首輪 | 886,086,528 | 220,872,704 | 0.041751084 |
+| 同 native `--software-renderer` | 103,224,960 | 268,075,008 | 0.225581208 |
+| Slint 預設 Skia OpenGL，新程序重測 | 883,185,344 | 221,724,672 | 0.073074500 |
+| Dioxus 格線對照版，原生前景未確認 | 238,693,376 | 453,165,056 | 0.015280126 |
+
+Slint 預設路徑兩次約842–845MiB footprint，software 這一輪約84–98MiB。取樣後對仍在運行的自有 PID 執行 `vmmap -summary`：GPU 主程序 physical footprint829.5M，其中 IOAccelerator (graphics) resident／dirty666.1M，另有64.0M IOAccelerator。這證明圖形配置是主要占用類別，尚未定位是哪個 texture／driver／cache 分配，不能宣稱是洩漏。software 的 CPU 與 RSS 這次較高，須補長文、雙GIF及影片同劇本的取捨，才決定預設 renderer；本輪沒有改產品預設。
+
+原 Dioxus `5ea9ad6` 拒絕 `parity_grid`，該次 exit2，沒有視窗或採樣。真正完成採樣的是既有 `2846dc4` Dioxus 對照 native `948d2a9e…`，含共用核心抽取，不能標成初始基準。它的 titlebar 非作用中，AX 能操作 PNG 匯出及關窗，座標操作仍回報 noWindowsAvailable；修改 diagnostic CFBundleExecutable 為 native 並未解決。該次 codesign 因 unsigned RunFixture subcomponent 失敗，native bytes 未變；只以明確合成 argv 啟動，沒有宣稱新 host 通過簽名。Slint 三輪首尾 AX terminal focus 與作用中 titlebar 可見，仍未連續記錄整段 OS foreground。前景不等、次數不足、未控制 cold／warm，故 S8 比較維持 not_ready，不能用上述數字計算達標比例。
+
+四段採樣皆通過原穩定 membership／counter 規則，family 含相同 responsible PID 的主程式、WebKit／MTL／ThemeWidget helper，沒有按程序名稱拉入別的聊天。正常退出後，最後觀測到的全數 PID＋start 身分已消失；Slint 三輪都有唯一嚴格 Close ACK，Dioxus PNG 匯出／surface／owner audit passed。原始 samples、run／sampling／acceptance、vmmap、硬體與來源 hash 保留。首次 Documents evidence 寫入 EPERM、錯誤 fixture 的語言／未知欄位導致 fallback、原基準不支援案例、前景未確認及簽名失敗，各自保留；後續成功不改寫它們。改用自有 `/private/tmp` 後可啟動，沒有變更 TCC 或系統權限。
+
+本批兩份 host App、已用完的自有暫存資料根與五個專用 OS cache／WebKit／暫存目錄共110,762,516 regular-file bytes已清理；僅保留小型合成資料／影像／原始 trace，沒有保留環境副本。3,016份候選／來源／兩個必要原生對照 hash 不變；Frameworks symlink 不跟隨刪除。exact八個路徑、resolved／UID／symlink／lsof、du及filesystem free247333158912→247453286400 bytes在 `cleanup/ledger.json`，free僅為並行觀測；另4份 byte-identical generated PNG 的SHA與保留位置見 `cleanup/duplicate-pngs.json`。最新四包、必要來源、共享工具與使用者資料未變。接續優先處理 renderer 圖形占用與正式前景觀測，再補完整重複次數／負載／平台矩陣。
+
+## 程序族與指標
+
+[macos_process_usage.py](../tooling/macos_process_usage.py) 是開發用 Python 工具，沒有新增產品依賴。它讀取本機 SDK 的 `proc_bsdshortinfo`／`rusage_info_v0`，以 PID 加啟動 counter 識別程序；不能用舊 PID 直接延續採樣或發 signal。主要記憶體指標為 live family 的 physical footprint，另列 RSS；RSS 加總可能重複計入共用頁面。這不是 GPU 專用記憶體或系統可用記憶體的差額。
+
+診斷 launcher 使用 macOS 的 responsibility spawn SPI，讓自己的 benchmark child 成為獨立 responsible root。程序族包含相同 responsible PID 的程序及遞迴 PPID 子程序。只有父子 PID 會漏掉 launchd 啟動的 WebKit XPC；反之，名稱相同、啟動時間相近或同一使用者都不足以建立歸屬。若目標沿用 Codex 的共用 responsibility，工具拒絕採樣，不把其他聊天的瀏覽器算給 PTTStella。這個 SPI 僅用於診斷，不變更 OS 設定或授權；介面不存在時為 `not_ready`。實際 spawn 呼叫對照 [Chromium launch_mac.cc](https://github.com/chromium/chromium/blob/main/base/process/launch_mac.cc)，CPU 介面背景見 [Apple XNU recount](https://github.com/apple-oss-distributions/xnu/blob/main/doc/observability/recount.md)。
+
+本機 CPU 原始 counter 必須先經 `mach_timebase_info` 換算。本次 arm64 校準為 numer=125、denom=3，80ms CPU 工作與獨立的 Python process CPU clock 核對；直接假設原始值為 ns 的初次失敗保留，沒有用錯誤單位產生結論。每個 sample 保留原始 ticks、換算 ns、timebase 及讀取耗時；其他 OS／架構須重新校準。
+
+## 穩定區間採樣
+
+在同一診斷 launcher 已取得目標 `Identity(pid, start)`，並獨立證明工作負載、畫面及焦點條件後執行：
+
+```text
+python3 tooling/macos_process_usage.py --pid <PID> --start <START_COUNTER> --duration 10 --interval 0.1 --output <NEW_DIRECTORY>
+```
+
+輸出 `samples.jsonl` 與 `phase.json`。目錄必須不存在，trace 權限為0600，工具不啟動、啟用或停止目標。duration 0.1–60秒、interval 0.05–1秒，最多1200個間隔；在完整指定區間的首尾均讀取 counter。CLI exit0只代表這段採樣完成，exit2及 `not_ready` 表示不能計算完整區間。部分 trace 保留，沒有用它冒充完整結果。
+
+`summarize_steady_phase` 只在每筆 sample 的 PID／start 集合完全相同、時鐘遞增且每個 CPU counter 未倒退時計算 CPU delta、平均使用核心數及**取樣到的**記憶體峰值。任何程序加入、退出、PID 重用、讀取失敗或 counter reset 都拒絕穩定區間彙總，不能把消失程序的 CPU 當成改善。它仍可能漏掉兩次採樣間完整出生及退出的 helper，也不捕捉瞬間記憶體峰值；啟動／反覆切換的完整 CPU、GPU、掉幀及顯示延遲需要額外觀測，不能由本工具證明。
+
+單元與 native 校準入口：
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tooling -p test_macos_process_usage.py
+```
+
+macOS 原生案例驗證獨立 root、fork child、同名 decoy 排除、CPU clock 單位，以及 CLI 採樣後目標仍運行並正常退出。其他平台跳過 native 案例，不算該平台驗收。負向案例核對共用 responsibility、PID 重用／群組 PID、程序消失、時鐘／counter 反例、有界採樣及保留 partial trace。
+
+## 已取得的校準證據
+
+證據在 `.local/verification/slint-perf-macos/`：
+
+- `dioxus-counterpart.json`：同來源樹 `2846dc4` 的 release Dioxus 對照 App，獨立 bundle ID，launcher 僅允許顯式 surface probe。它不是最初 `5ea9ad6` 的基準；初始基準及其證據另保留。Slint 採用已保留的 `slint-capture-ack/package-current` 候選。
+- `accounting-calibration.json`、兩份 `*-family.jsonl`：實際 Dioxus 原生視窗共444筆採樣，觀察到主程序、GPU／WebContent／Networking及操作工具後的 AppKit helper；四個 helper 的 PPID 為1，responsibility 仍指向同一主程序。Slint 自動格線擷取有5筆、當時只觀察到主程序，不能外推永遠沒有 helper。
+- `dioxus-calibration/`：實際浮球／PNG 操作、960×576輸出、probe passed及Close／owner cleanup；`dioxus-family-after-close.json` 確認五個觀測身分均消失。`slint-calibration/` 保存960×576格線與1000×690 toolkit擷取，Close ACK由原始log核對。這些不是相同 OS 顯示延遲觀測點。
+- `accounting-smoke-source.py`／JSON 凍結上述兩次 smoke 當時工具；後加的 PID／coverage 保護與穩定區間 CLI 由最終單元及原生測試另驗，不把新功能倒填進舊證據。
+
+兩次工作時間、操作、視窗及焦點條件不同，不能據此比較 CPU 或記憶體。舊資料中 Dioxus與Slint的字型／視窗及5次對1次啟動也不符合共同條件；不拿來計算勝負或改善比例。
+
+## 接續正式比較的必要條件
+
+2026-11-10 接續修正：正常Live及完整服務benchmark現在使用同一個產品shell，隱藏常駐的原型標題、媒體開關、站點selector、輸出、Vim／滑鼠及footer列；沒有關閉服務。這個無文章控制列的終端viewport已到1040×740、格線1040×624。閱讀中的載入／更新／推文等情境控制仍保留，其他工作負載要各自核對實際viewport。縮放、擷取、連線與設定沿用浮球；補上收藏分類的草稿入口及設定分類的Slint授權面板。有效站端scope的草稿新入口仍待完整操作矩陣，不能只由掛接宣稱已驗。
+
+連線狀態另有來自Connection phase的attention欄位，不由翻譯字串推測；正常連線訊息不常駐遮住格線，斷線／錯誤／警告浮層保持可見。操作通知可明確關閉，純連線狀態不顯示無效關閉鈕；同一連線訊息的後續frame不再覆蓋本機操作結果。浮層不參與終端版面，長訊息可捲動，沒有改PNG、原始格線或輸入准入。完整成功淡出、通知焦點、原生IME及全功能操作矩陣仍在S3／S7範圍內待驗。
+
+新增 `--verify-shell NEW_DIRECTORY`，以同一16項owner及嚴格peer驗證完整viewport、授權面板／Escape／焦點、浮球縮放選擇、拒絕未選行的實際匯出錯誤、通知及明確斷線；使用toolkit回呼／synthetic foreground，不能當OS輸入。最終完整候選native SHA-256 `c9413d395939e76dfd76cc31d16cc7b8559232ee7d0e9addb4a75c7c1301c0d3` 的CPU／GL兩案、兩種浮球及18影片＋9閱讀＋2混合共33案通過。固定960×576的source PNG仍逐byte等於上一輪，SHA-256 `294df2bbe92bff771a2fc36480935f3c10904547f9c89850032e6cfcf49e4e37`。
+
+macOS arm64最終封裝另以CUA實見浮球→設定→Slint授權、Escape後AX焦點回到終端、明確斷線後持續狀態且無無效X，以及⌘Q／exit0／Close ACK；來源為 `.local/verification/slint-shell-chrome-final/native-accepted.json`。前一份native hash `7d9c9ba1…` 的實際125%／100%、面板捲動及第24行有證據，但監督程序在240秒逾時終止該實例，exit -15，未列為正常退出。原生觀察因此促成移除純連線狀態的無效X；舊負向保留。最終退出的OS IMK mach-port訊息仍保留，未用這次結果宣稱IME正常或異常已修。
+
+本批release Rust373＋83＋10通過、6個既有明確ignored，兩配置全target Clippy、Python126及fmt通過。actionlint未安裝、workflow來源未修改，該工具檢查為not_ready；其他架構／乾淨機器／對應來源與完整效能仍未由此包證明。最終App／ZIP／DMG位於同批 `package-current/`；先前包與本批編譯／暫存依逐批清理，來源與唯一反例保留。
+
+2026-11-10 已新增 `pttstella-slint --probe-benchmark NEW_DIRECTORY`。舊 `--probe-grid` 在 UI 外持有 loopback Connection，視窗只接靜態 Frame，不能與完整 Dioxus host 比資源。新入口用與 Live 共用的完整服務判斷，掛載文章、輸入、輸出、媒體／設定、草稿、站點、名單、收藏、前往、登入、保活、滑鼠／選單及 connection watch；16項實際 owner／mount 檢查完成後才輸出 `prepared.json`、固定960×576的 `source.png` 與 toolkit `snapshot.png`。唯一20ms準備 timer 在完成或5秒失敗時停止；成功不自動輸入、合成前景或關窗。正式資料路徑、vault 及正常啟動行為不變；新入口的所有 store 在指定新目錄，憑證仍走 synthetic scope，peer 拒絕任何站端輸入。
+
+`.local/verification/slint-benchmark-session/accepted-result.json` 記錄最終 release native hash。macOS arm64 在禁止讀 Homebrew、禁止讀寫產品／研究版一般資料、對外連線僅允許 localhost 的 sandbox 裡，16項服務及格線／幾何已安裝。CUA 實見雙色「中」、16色與第24行，⌘Q後程序exit0、嚴格peer Close ACK及既有各owner finish完成。Raise與標題點擊沒有證明前景啟用，工具仍disabled；不宣稱可輸入或完整焦點驗收。先前兩個被SIGTERM結束的實例及sandbox／staging失敗各自保留，不能合併成正常退出通過。未最佳化及strip後未最佳化執行檔都超出打包器128MiB上限，未放寬限制；改用release後成功。
+
+這次同樣1040×740外視窗內的 Slint viewport 是1016×442、格線736×442；原型常駐工具列占用了畫面，外視窗相同並不等於共同工作量。因此先前及本次閒置採樣都不產生與Dioxus的改善比例。下一步應依產品浮球工具列契約移除正常視窗的原型常駐列，保留全部操作入口與持續可見的斷線／錯誤提示，再驗證兩個host的實際viewport及前景。不能為跑分關掉服務或只在benchmark隱藏產品仍有的工作。
+
+本批Rust為native-player-probe的lib373、bin83、多程序10項通過，另有6個既有明確ignored；全target Clippy通過。release打包closure的50個dylib與上一個候選的原始hash相同；加上主程式manifest共51筆，並非新增了另一個runtime依賴。診斷App的CFBundleExecutable先指向script，CUA無法綁定；改成與實際native主程式一致並重簽後可綁定，產品packager原本即採native。這是診斷staging修正，沒有改產品識別。
+
+先讓兩個完整 host 的顯式 probe 接受相同 viewport／DPI／字型、工作負載和開始／結束觀測點，核對輸入 bytes、畫面及 Close。區分 native OS 前景與合成 toolkit foreground，不能為跑分放寬生產失焦保護。首個可見且可輸入 frame、輸入到顯示器呈現、下載／取頁及 bitmap 計算分開記錄。
+
+cold／warm 要記錄定義；macOS WebKit 會在 `Library/WebKit/<task bundle id>` 和 `Library/Caches/<task bundle id>` 留下資料，僅換 probe 目錄不足以稱 cold。只能清自己 namespace，不能清系統 cache 或其他 App 資料。兩版順序交錯，各至少10次啟動及每組100次操作；閒置、長文、雙GIF、影片、草稿、多開、反覆切換／回收後各自觀測。穩定區間工具可重用，membership churn 的階段另補完整 lifetime 記帳。
+
+本批 release profile、系統暫存與專用 WebKit cache 已依[清理規則](development-harness.md#產物清理與結案)清理，exact五筆路徑及保留理由在同批 `cleanup/ledger.json`；不為工具測試重建 Rust。下一批沿用各一份 Slint候選與Dioxus對照程式，只有來源變更或必要 gate 才重建。低階 Windows門檻、四架構、完整回退及S0–S8功能驗收仍未完成，S9未執行。
+
+## 2026-11-11 macOS 局部呈現實驗
+
+鎖定的 softbuffer 0.4.8 在 macOS 將 `present_with_damage` 轉成整窗提交。實驗以 256×128 像素圖塊提交受影響的區域，首次繪製、超過範圍限制或非支援倍率時走整窗。目標是降低軟體 renderer 在多張 GIF 播放時的 CPU 開銷。[上游 macOS 呈現討論](https://github.com/rust-windowing/softbuffer/issues/83)
+
+同一個 arm64 診斷執行檔 `1db8a1d6…`，按整窗、圖塊、圖塊、整窗順序播放兩張 512×160 的合成 GIF。1040×768 外視窗，每次取樣 10 秒，共 101 筆，觀察取樣前後的文章焦點及紅藍換幀。四次各下載兩個不同 URL 一次，正常退出、嚴格 Close ACK 及 HTTP join 均成立。第三次在取樣後另外確認原生全螢幕 1920×1080 與回復原尺寸的畫面。
+
+| 模式 | 10 秒 CPU | 取樣 footprint 峰值 |
+| --- | ---: | ---: |
+| 整窗 1 | 0.326 s | 117.2 MiB |
+| 圖塊 2 | 0.269 s | 100.0 MiB |
+| 圖塊 3 | 0.271 s | 110.5 MiB |
+| 整窗 4 | 0.314 s | 104.0 MiB |
+
+兩組配對分別少 17.5% 和 13.7% CPU。前一組同視窗的生命週期計數平均每次提交 769,600／352,842 像素，少 54.2%。這是同一 Slint 診斷程式的 A/B；先前 Dioxus 的雙 GIF CPU 中位數 0.180 秒仍低於圖塊組的 0.270 秒。畫面只經實際視窗觀察，尚缺連續焦點、呈現延遲、高 DPI、多螢幕與其他場景驗證。
+
+第一次 staging 缺 LC_RPATH，修正後以既有候選的 runtime 啟動。首次圖塊畫面上下位置顛倒，改用 Core Animation 的垂直原點後重跑全組。Cargo 初次離線重解誤動其他依賴，還原後兩次 locked build 均成功。上述原始紀錄均保留，原生工具在 Quit 後的觀察逾時由實際 exit 0、Close 和程序消失獨立核對。
+
+原始資料、兩份實驗補丁、原始 crate SHA-256 及編譯命令在 `.local/verification/slint-macos-damage-current/`。重跑時以該目錄的 `final-source.json` 所列 commit 為基準，從 `softbuffer-source.json` 核對發布的 0.4.8 crate 並按其檔案清單放入 `vendor/softbuffer`，套用 `final-tracked.patch` 和 `softbuffer-0.4.8-macos-tiles.patch`，沿用 `final-build.json` 命令及 `trial.py` 的模式與合成資料。實驗依賴已退出產品來源，保留四架構候選的現有呈現方式。唯一暫存 App、其專用空 cache 和暫用 vendor 副本已清理，固定 Cargo target 保留。確切路徑、檔案大小和磁碟觀測見 `cleanup.json`。
+
+## 2026-11-13 cb4fbfc 出貨連結與被動載入
+
+以已封裝的四架構候選及 Apple Silicon Dioxus 回退 DMG 核對執行檔雜湊。Slint 選用的 Cargo 依賴在四架構、兩配置共八案通過，未包含 Dioxus、Wry 或 WebView。現行 worktree 與產品提交之間只有文件變更，Cargo.toml 與 Cargo.lock 雜湊已核對。
+
+| 交付 | 實際核對 |
+| --- | --- |
+| Apple Silicon 與 Intel Mac App | 分別 51 與 48 個 Mach-O 的架構、直接連結和深層簽章通過 |
+| Windows 便攜 ZIP 與離線 Setup | 五個便攜 PE 與 Setup 的一般、延遲匯入及 AMD64 核對通過，VC runtime 閉包已隨包提供 |
+| Linux deb／tar.gz | AMD64 ELF 的八筆 DT_NEEDED 及 deb 的 20 個 Depends 均無 WebView 相關項目 |
+| Apple Silicon Dioxus 回退 DMG | 確認 `82bc81f` 的出貨主程式直接連結系統 WebKit |
+
+Apple Silicon Slint 出貨檔另以 `--verify-shell` 被動啟動，採合成焦點及本機格線。dyld trace 仍看到系統 WebKit、JavaScriptCore 與 WritingTools，主視窗測試正常退出且收到唯一 Close ACK。此輪涵蓋載入映射，程序內 WebView 實例與一般入口程序族另待驗。這次未測量效能或原生焦點。
+
+雜湊、原始載入紀錄、匯入表、對照及暫存清理保存在 `.local/verification/slint-article-arrow/dependency-audit/`。沿用原交付與編譯快取。短期提取的 PE／ELF、測試 HOME、回退 DMG 掛載點及空的合成資料鎖已清理。

@@ -1,0 +1,289 @@
+import {ContextMenuOverlay} from "context-menu.slint";
+import {PanelButton, PanelSlider, PanelTheme} from "panel.slint";
+import {LucideIcons} from "lucide-icons.slint";
+
+struct MediaTool {
+    label: string,
+    icon: image,
+    action: int,
+    enabled: bool,
+}
+
+export component MediaPreview inherits Rectangle {
+    in property <image> pixels;
+    in property <string> source-key;
+    in property <string> url;
+    in property <string> status;
+    in property <bool> ready;
+    in property <bool> video;
+    in property <bool> software-video;
+    in-out property <float> position;
+    in property <float> duration;
+    in-out property <float> volume;
+    in property <bool> muted;
+    in property <string> volume-label;
+    in property <string> position-label;
+    in property <string> mute-label;
+    in property <string> unmute-label;
+    in property <bool> audio-controls-enabled;
+    callback set-volume(float);
+    callback set-muted(bool);
+    function adjust-volume(value: float) {
+        if root.audio-controls-enabled {
+            root.volume = round(clamp(value, 0, 100));
+            root.set-volume(root.volume);
+        }
+    }
+    out property <length> video-left: view.absolute-position.x;
+    out property <length> video-top: view.absolute-position.y;
+    out property <length> video-width: view.width;
+    out property <length> video-height: view.height;
+    callback seek(float);
+    in property <bool> busy;
+    in property <string> copy-label;
+    in property <string> save-label;
+    in property <string> copy-url-label;
+    in property <bool> animated;
+    in property <bool> playing;
+    in property <bool> foreground;
+    in property <string> close-label;
+    in property <string> retry-label;
+    in property <string> motion-label;
+    in property <string> external-label;
+    in property <string> fit-label;
+    in property <string> original-label;
+    in property <string> zoom-in-label;
+    in property <string> zoom-out-label;
+    callback action(int);
+    callback focus-preview;
+    focus-preview => { keys.focus(); }
+    property <bool> fit: true;
+    property <float> scale: 1;
+    property <length> pan-x;
+    property <length> pan-y;
+    property <length> grab-x;
+    property <length> grab-y;
+    property <bool> dragging;
+    property <bool> menu-open;
+    property <int> menu-index;
+    property <length> menu-x;
+    property <length> menu-y;
+    private property <string> audio-action-label: root.muted ? root.unmute-label : root.mute-label;
+    out property <string> toolbar-tooltip: root.hint-action == 2 ? root.motion-label
+        : root.hint-action == 11 ? root.audio-action-label : root.hint;
+    private property <int> hint-action: -1;
+    private property <string> hint;
+    private property <length> hint-x;
+    private property <length> hint-y;
+    function tool-hover(active: bool, action: int, label: string, x: length, y: length) {
+        if active {
+            root.hint-action = action;
+            root.hint = label;
+            root.hint-x = x;
+            root.hint-y = y;
+        } else if root.hint-action == action {
+            root.hint-action = -1;
+            root.hint = "";
+        }
+    }
+    function toolbar-action(code: int) {
+        if code == 7 || code == 8 {
+            root.zoom-by(code == 7 ? 1 / 1.25 : 1.25, view.width / 2, view.height / 2);
+        } else if code == 9 || code == 10 {
+            root.fit = code == 9;
+            root.scale = 1;
+            root.pan-x = 0px;
+            root.pan-y = 0px;
+        } else {
+            root.action(code);
+        }
+    }
+    private property <[MediaTool]> image-tools: root.animated ? [
+        {label: root.motion-label, icon: root.playing ? LucideIcons.pause : LucideIcons.play, action: 2, enabled: root.ready}
+    ] : [];
+    function open-menu(x:length,y:length) {
+        if !root.video && !root.busy && root.foreground {
+            root.dragging=false;root.menu-x=x;root.menu-y=y;
+            root.menu-index=root.ready ? 0 : 2;root.menu-open=true;menu.focus-menu();
+        }
+    }
+    function dismiss-menu() {root.menu-open=false;keys.focus();}
+    function choose-menu(index:int) {
+        if root.busy || index < 0 || index > 3 || (index < 2 && !root.ready) {return;}
+        root.dismiss-menu();root.action(index < 3 ? index + 4 : 3);
+    }
+    private property <bool> pannable: root.pixels.width * root.actual * 1px > view.width
+        || root.pixels.height * root.actual * 1px > view.height;
+    property <float> actual: root.fit ? max(0.01, min(1, min(view.width / max(1px, root.pixels.width * 1px), view.height / max(1px, root.pixels.height * 1px)))) : root.scale;
+    changed source-key => { root.fit=true; root.scale=1;root.pan-x=0px;root.pan-y=0px;root.dragging=false;root.menu-open=false;root.hint-action=-1;root.hint=""; }
+    changed foreground => { if !root.foreground {root.dragging=false;root.menu-open=false;} }
+    changed width => {root.dragging=false;root.menu-open=false;}
+    changed height => {root.dragging=false;root.menu-open=false;}
+    changed busy => {if root.busy {root.menu-open=false;}}
+    function zoom-by(factor:float,x:length,y:length) {
+        let old = root.actual;
+        let next = clamp(old * factor,0.01,8);
+        root.pan-x = x - view.width / 2 - (x - view.width / 2 - root.pan-x) * next / old;
+        root.pan-y = y - view.height / 2 - (y - view.height / 2 - root.pan-y) * next / old;
+        root.scale=next;root.fit=false;
+    }
+    background: #000b;
+    TouchArea { clicked => {} }
+    keys := FocusScope {
+        width:parent.width;height:parent.height;
+        key-pressed(event) => {
+            if event.text == Key.Escape {root.action(0);return accept;}
+            if event.text == Key.F10 && event.modifiers.shift {root.open-menu(root.width/2,root.height/2);return accept;}
+            return reject;
+        }
+        Rectangle {
+            x: 12px; y: 12px; width: parent.width - 24px; height: parent.height - 24px;
+            background: PanelTheme.surface; border-color: PanelTheme.gold-border; border-width: 1px; border-radius: 8px;
+            VerticalLayout { padding: 12px; spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 34px; horizontal-stretch: 1; clip: true;
+                        background: PanelTheme.input; border-width: 1px; border-color: PanelTheme.border; border-radius: 4px;
+                        Image {
+                            x: 10px; y: 8px; width: 18px; height: 18px;
+                            source: LucideIcons.link; colorize: PanelTheme.gold;
+                        }
+                        Text {
+                            x: 38px; width: parent.width - 48px;
+                            text: root.url; color: PanelTheme.text; font-size: 13px;
+                            vertical-alignment: center; overflow: elide;
+                        }
+                    }
+                    for tool in [
+                        {label: root.copy-url-label, icon: LucideIcons.copy, action: 6, enabled: !root.busy},
+                        {label: root.external-label, icon: LucideIcons.external-link, action: 3, enabled: true},
+                        {label: root.close-label, icon: LucideIcons.x, action: 0, enabled: true}
+                    ]: PanelButton {
+                        text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                        changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.toolbar-action(tool.action); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    if !root.video: HorizontalLayout {
+                        spacing: 6px;
+                        for tool in [
+                            {label: root.zoom-out-label, icon: LucideIcons.zoom-out, action: 7, enabled: root.ready},
+                            {label: root.zoom-in-label, icon: LucideIcons.zoom-in, action: 8, enabled: root.ready},
+                            {label: root.fit-label, icon: LucideIcons.scan, action: 9, enabled: root.ready},
+                            {label: root.original-label, icon: LucideIcons.square, action: 10, enabled: root.ready},
+                            {label: root.copy-label, icon: LucideIcons.copy, action: 4, enabled: root.ready && !root.busy},
+                            {label: root.save-label, icon: LucideIcons.file-down, action: 5, enabled: root.ready && !root.busy}
+                        ]: PanelButton {
+                            text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                            changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                            clicked => { root.toolbar-action(tool.action); }
+                        }
+                        for tool in root.image-tools: PanelButton {
+                            text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                            changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                            clicked => { root.toolbar-action(tool.action); }
+                        }
+                    }
+                    retry-button := PanelButton {
+                        text: root.retry-label; icon: LucideIcons.refresh-cw; icon-only: true; enabled: !root.busy; hover-when-disabled: true;
+                        changed hovered => { root.tool-hover(self.hovered, 1, root.retry-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.toolbar-action(1); }
+                    }
+                    Text {
+                        text: root.status; color: #cdd9e8; horizontal-stretch: 1;
+                        min-width: 0px; vertical-alignment: center; overflow: elide;
+                    }
+                }
+                if root.video: HorizontalLayout {
+                    spacing: 8px;
+                    PanelButton {
+                        text: root.motion-label;
+                        icon: root.playing ? LucideIcons.pause : LucideIcons.play;
+                        icon-only: true; hover-when-disabled: true;
+                        enabled: root.ready && root.foreground && !root.busy;
+                        changed hovered => { root.tool-hover(self.hovered, 2, root.motion-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.action(2); }
+                    }
+                    PanelSlider {
+                        label: root.position-label;
+                        minimum: 0; maximum: max(1, root.duration);
+                        value <=> root.position;
+                        enabled: root.duration > 0 && root.foreground && !root.busy;
+                        changed(value) => { root.seek(value); }
+                    }
+                    Text { text: round(root.position) + " / " + round(root.duration) + " s"; color: PanelTheme.muted; vertical-alignment: center; }
+                    PanelButton {
+                        text: root.audio-action-label;
+                        icon: root.muted ? LucideIcons.volume-x : LucideIcons.volume-2;
+                        icon-only: true; hover-when-disabled: true;
+                        enabled: root.audio-controls-enabled;
+                        changed hovered => { root.tool-hover(self.hovered, 11, root.audio-action-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.set-muted(!root.muted); }
+                    }
+                    PanelSlider {
+                        label: root.volume-label;
+                        minimum: 0; maximum: 100; step: 1;
+                        value <=> root.volume;
+                        enabled: root.audio-controls-enabled;
+                        horizontal-stretch: 0; preferred-width: 92px; max-width: 120px;
+                        // Keep one command per drag or key press for the bounded player queue.
+                        released(value) => { root.adjust-volume(value); }
+                    }
+                    Text { text: round(root.volume) + "%"; min-width: 36px; horizontal-alignment: right; vertical-alignment: center; color: PanelTheme.muted; }
+                }
+                view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#070e18;
+                    if root.video && root.software-video: Image {source:root.pixels;width:parent.width;height:parent.height;image-fit:contain;}
+                    if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
+                        x:(parent.width - self.width)/2 + root.pan-x;y:(parent.height - self.height)/2 + root.pan-y;image-fit:fill;}
+                    pointer := TouchArea {
+                        enabled: !root.video && root.ready && root.foreground;
+                        mouse-cursor: root.dragging ? MouseCursor.grabbing
+                            : root.pannable ? MouseCursor.grab : MouseCursor.default;
+                        pointer-event(event) => {
+                            if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                                root.open-menu(view.x + 12px + self.mouse-x,view.y + 12px + self.mouse-y);
+                            }
+                            if event.button == PointerEventButton.left {
+                                if event.kind == PointerEventKind.down && root.pannable {root.grab-x=self.mouse-x - root.pan-x;root.grab-y=self.mouse-y - root.pan-y;root.dragging=true;}
+                                else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {root.dragging=false;}
+                            }
+                        }
+                        moved => {if root.dragging && self.pressed {root.pan-x=self.mouse-x - root.grab-x;root.pan-y=self.mouse-y - root.grab-y;}}
+                        scroll-event(event) => {root.zoom-by(event.delta-y > 0px ? 1.1 : 1/1.1,self.mouse-x,self.mouse-y);return accept;}
+                    }
+                }
+            }
+        }
+    }
+    Rectangle {
+        visible: root.toolbar-tooltip != "" && !root.menu-open && root.foreground;
+        x: clamp(root.hint-x, 12px, root.width - self.width - 12px);
+        y: root.hint-y + 4px;
+        width: min(root.width - 24px, hint-label.preferred-width + 20px); height: 26px;
+        background: PanelTheme.control; border-color: PanelTheme.gold; border-width: 1px; border-radius: 4px;
+        hint-label := Text {
+            x: 10px; width: parent.width - 20px; text: root.toolbar-tooltip;
+            color: PanelTheme.text; font-size: 13px; vertical-alignment: center; overflow: elide;
+        }
+    }
+    menu := ContextMenuOverlay {
+        visible:root.menu-open;width:parent.width;height:parent.height;
+        entries:[{label:root.copy-label,enabled:root.ready && !root.busy},
+            {label:root.save-label,enabled:root.ready && !root.busy},
+            {label:root.copy-url-label,enabled:!root.busy},{label:root.external-label,enabled:!root.busy}];
+        anchor-x:root.menu-x;anchor-y:root.menu-y;selected:root.menu-index;
+        choose(index)=>{root.choose-menu(index);}
+        dismiss(consume)=>{root.dismiss-menu();}
+        key(kind,repeat)=>{
+            if kind == 0 || kind == 1 {root.dismiss-menu();}
+            else if kind == 2 {root.menu-index=Math.mod(root.menu-index + 3,4);if !root.ready && root.menu-index < 2 {root.menu-index=3;}}
+            else if kind == 3 {root.menu-index=Math.mod(root.menu-index + 1,4);if !root.ready && root.menu-index < 2 {root.menu-index=2;}}
+            else if kind == 4 {root.menu-index=root.ready ? 0 : 2;}
+            else if kind == 5 {root.menu-index=3;}
+            else if kind == 6 && !repeat {root.choose-menu(root.menu-index);}
+        }
+    }
+}

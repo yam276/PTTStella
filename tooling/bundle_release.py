@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import re
 import shutil
 import struct
 import subprocess
@@ -48,13 +49,13 @@ def native_platform():
     raise RuntimeError(f'Unsupported native Release platform: {system}/{machine}')
 
 
-def inspect_elf(executable):
+def inspect_elf(executable, *, loader=None):
     with executable.open('rb') as stream:
         header = stream.read(64)
     if (len(header) != 64 or header[:6] != b'\x7fELF\x02\x01'
             or struct.unpack_from('<H', header, 18)[0] != 62):
         raise ValueError('Expected a little-endian x86-64 ELF executable')
-    libraries = run('ldd', str(executable))
+    libraries = run(str(loader), '--list', str(executable)) if loader else run('ldd', str(executable))
     if 'not found' in libraries:
         raise RuntimeError('Linux package has unresolved shared libraries: '+libraries)
     for line in libraries.splitlines():
@@ -65,22 +66,38 @@ def inspect_elf(executable):
     return libraries
 
 
-def linux_package(staging, stem, version):
-    executable = bundle_common.build()
-    libraries = inspect_elf(executable)
+def linux_package(staging, stem, version, executable=None, *, program='pttstella',
+                  display_name='PTTStella', desktop_id='io.github.yam276.pttstella',
+                  feature='desktop', readme=None, resources=None, loader=None,
+                  forbidden_libraries=(), extra_depends=()):
+    """One archive/deb layout for the established app and isolated Slint candidate."""
+    if not re.fullmatch(r'[a-z0-9][a-z0-9+-]*', program):
+        raise ValueError('Invalid Linux package/program name')
+    if any(c in display_name + desktop_id for c in '\r\n'):
+        raise ValueError('Invalid Linux desktop identity')
+    executable = executable if executable is not None else bundle_common.build()
+    libraries = inspect_elf(executable, loader=loader)
+    if any(name.lower() in libraries.lower() for name in forbidden_libraries):
+        raise RuntimeError('Forbidden Linux runtime dependency')
     package = staging/stem
     package.mkdir()
-    shutil.copy2(executable, package/'pttstella')
-    (package/'pttstella').chmod(0o755)
-    bundle_common.copy_licenses(package/'licenses', TARGETS['linux-x64'])
-    shutil.copy2(ROOT/'docs/linux-package.txt', package/'README.txt')
+    shutil.copy2(executable, package/program)
+    (package/program).chmod(0o755)
+    bundle_common.copy_licenses(package/'licenses', TARGETS['linux-x64'], feature=feature)
+    shutil.copy2(readme if readme is not None else ROOT/'docs/linux-package.txt', package/'README.txt')
+    for relative, source in (resources or {}).items():
+        destination = package/relative
+        if Path(relative).is_absolute() or '..' in Path(relative).parts or destination.exists():
+            raise ValueError('Invalid or conflicting Linux resource path')
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
     # Calculate dependency versions from the actual ELF and installed dpkg data.
     # A missing symbol/library mapping fails instead of guessing a dependency.
     debian = staging/'debian'
     debian.mkdir()
-    control = ('Source: pttstella\nSection: net\nPriority: optional\n'
+    control = (f'Source: {program}\nSection: net\nPriority: optional\n'
                'Maintainer: yam276 <59956724+yam276@users.noreply.github.com>\n\n'
-               'Package: pttstella\nArchitecture: amd64\nDescription: PTT desktop client\n')
+               f'Package: {program}\nArchitecture: amd64\nDescription: PTT desktop client\n')
     (debian/'control').write_text(control, encoding='utf-8')
     dependencies = run('dpkg-shlibdeps', '-O', '-e'+str(executable), cwd=staging)
     fields = [line.removeprefix('shlibs:Depends=') for line in dependencies.splitlines()
@@ -88,20 +105,24 @@ def linux_package(staging, stem, version):
     if len(fields) != 1 or not fields[0]:
         raise RuntimeError('dpkg-shlibdeps did not report runtime dependencies')
     depends = fields[0]+', ca-certificates, xdg-desktop-portal, xdg-desktop-portal-gtk'
+    if extra_depends:
+        if any(not item or '\n' in item or '\r' in item for item in extra_depends):
+            raise ValueError('Invalid additional Linux runtime dependency')
+        depends += ', ' + ', '.join(extra_depends)
     debroot = staging/'debroot'
-    binary = debroot/'usr/bin/pttstella'
+    binary = debroot/'usr/bin'/program
     binary.parent.mkdir(parents=True)
-    shutil.copy2(package/'pttstella', binary)
-    doc = debroot/'usr/share/doc/pttstella'
+    shutil.copy2(package/program, binary)
+    doc = debroot/'usr/share/doc'/program
     doc.parent.mkdir(parents=True)
     shutil.copytree(package/'licenses', doc/'licenses')
     shutil.copy2(package/'README.txt', doc/'README.txt')
-    desktop = debroot/'usr/share/applications/io.github.yam276.pttstella.desktop'
+    desktop = debroot/'usr/share/applications'/(desktop_id+'.desktop')
     desktop.parent.mkdir(parents=True)
-    desktop.write_text('[Desktop Entry]\nType=Application\nName=PTTStella\n'
-                       'Comment=Terminal-style BBS client\nExec=pttstella\n'
-                       'Icon=pttstella\nTerminal=false\nCategories=Network;\n', encoding='utf-8')
-    icon = debroot/'usr/share/icons/hicolor/1024x1024/apps/pttstella.png'
+    desktop.write_text(f'[Desktop Entry]\nType=Application\nName={display_name}\n'
+                       f'Comment=Terminal-style BBS client\nExec={program}\n'
+                       f'Icon={program}\nTerminal=false\nCategories=Network;\n', encoding='utf-8')
+    icon = debroot/'usr/share/icons/hicolor/1024x1024/apps'/(program+'.png')
     icon.parent.mkdir(parents=True)
     shutil.copy2(ROOT/'assets/icons/pttstella.png', icon)
     metadata = debroot/'DEBIAN'
@@ -109,7 +130,7 @@ def linux_package(staging, stem, version):
     deb_version = version.replace('-', '~', 1)
     size = sum(p.stat().st_size for p in debroot.rglob('*') if p.is_file())//1024+1
     (metadata/'control').write_text(
-        f'Package: pttstella\nVersion: {deb_version}\nArchitecture: amd64\n'
+        f'Package: {program}\nVersion: {deb_version}\nArchitecture: amd64\n'
         'Maintainer: yam276 <59956724+yam276@users.noreply.github.com>\n'
         f'Depends: {depends}\nInstalled-Size: {size}\nSection: net\nPriority: optional\n'
         'Description: Terminal-style BBS desktop client\n', encoding='utf-8')
@@ -124,10 +145,10 @@ def linux_package(staging, stem, version):
                             'depends': depends, 'libraries': libraries, 'signed': False}
 
 
-def macos_disk_image(app, image):
+def macos_disk_image(app, image, volume_name='PTTStella'):
     applications = Path('/Applications')
     (app.parent/'Applications').symlink_to(applications)
-    run('hdiutil', 'create', '-volname', 'PTTStella', '-fs', 'HFS+', '-format', 'UDZO',
+    run('hdiutil', 'create', '-volname', volume_name, '-fs', 'HFS+', '-format', 'UDZO',
         '-srcfolder', str(app.parent), str(image))
     run('hdiutil', 'verify', str(image))
 
@@ -178,25 +199,16 @@ def bundle(output):
     dirty = bool(run('git', 'status', '--porcelain', '--untracked-files=normal'))
     with tempfile.TemporaryDirectory(prefix='.release-', dir=output) as temporary:
         staging = Path(temporary)
+        # The release entry is the Slint frontend; Dioxus packagers remain for rollback builds.
+        import bundle_slint_release
         if target == 'windows-x64':
-            result = bundle_windows.bundle(staging/'windows', with_installer=True, with_portable=True)
-            # ZIP remains a local verification artifact; users choose Setup or
-            # the standalone App EXE, both from the same static-CRT build.
-            assets = []
-            for source in (Path(result['installer']), Path(result['portable'])):
-                archive = staging/source.name
-                shutil.copy2(source, archive)
-                assets.append(archive)
-            details = {'authenticode_signed': False,
-                       'runtime': 'Microsoft Edge WebView2 Evergreen Runtime',
-                       'installer': result['installer_details'],
-                       'portable': result['portable_details']}
+            assets, details = bundle_slint_release.windows(staging, stem, version, revision)
         elif target.startswith('macos-'):
-            assets, details = macos_package(staging, stem, target)
+            assets, details = bundle_slint_release.macos(staging, stem, target, revision)
         else:
-            assets, details = linux_package(staging, stem, version)
+            assets, details = bundle_slint_release.linux(staging, stem, version, revision)
         manifest = {'version': version, 'platform': target, 'target': TARGETS[target],
-                    'profile': 'release', 'source_commit': revision, 'source_dirty': dirty,
+                    'frontend': 'slint', 'features': bundle_slint_release.FEATURES, 'profile': 'release', 'source_commit': revision, 'source_dirty': dirty,
                     'gui_acceptance': 'not_run', **details,
                     'files': {p.name: digest(p) for p in assets}}
         report = staging/(stem+'.json')

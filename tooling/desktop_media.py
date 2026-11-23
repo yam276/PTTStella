@@ -10,7 +10,9 @@ import subprocess
 FIXTURES = Path(__file__).resolve().parent.parent / 'tests/fixtures/media'
 
 class FixtureServer:
-    def __init__(self):
+    def __init__(self, dual_gif=None):
+        if dual_gif is not None and not 0 < len(dual_gif) <= 24 * 1024 * 1024:
+            raise ValueError('dual GIF fixture must be a bounded nonempty payload')
         self.counts = {}
         self.lock = threading.Lock()
         self.cancelled = threading.Event()
@@ -42,6 +44,8 @@ class FixtureServer:
                     '/colours.png': ((FIXTURES / 'colours.png').read_bytes(), 'image/png'),
                     '/hover.png': ((FIXTURES / 'colours.png').read_bytes(), 'image/png'),
                     '/motion.gif': ((FIXTURES / 'motion.gif').read_bytes(), 'image/gif'),
+                    **({path: (dual_gif, 'image/gif') for path in ('/motion-a.gif', '/motion-b.gif')}
+                       if dual_gif is not None else {}),
                     '/movie.webm': (owner.video, 'video/webm'),
                     '/colours.jpg': (owner.jpeg, 'image/jpeg'),
                     '/colours.webp': (owner.webp, 'image/webp'),
@@ -239,3 +243,43 @@ def run(d, output, server):
             'http_cancelled':True,'youtube_external_sink':True,'keyboard_and_canvas_unchanged':True,
             'timings_ms':{'cold_preview':round(cold_ms,2),'memory_cache_preview':round(warm_ms,2),'close_and_http_cancel':round(cancel_ms,2)},
             'measurement_scope':'single loopback 64x32 PNG; includes trusted input/CDP polling; no prior equivalent feature baseline; CPU/process-family memory not measured'}
+
+
+def serve_dual_gif(fixture, output):
+    """Standalone fixture owner for manual native benchmarks; no UI driver."""
+    import hashlib
+    import stat
+    metadata = fixture.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 24 * 1024 * 1024:
+        raise ValueError('fixture must be a bounded regular file')
+    payload = fixture.read_bytes()
+    output.mkdir()
+    report = {'fixture_sha256': hashlib.sha256(payload).hexdigest(),
+              'fixture_bytes': len(payload), 'scope': 'loopback HTTP only; no UI automation'}
+    timed_out = False
+    with FixtureServer(dual_gif=payload) as server:
+        report['origin'] = server.origin
+        (output / 'ready.json').write_text(json.dumps(report, indent=2))
+        deadline = time.monotonic() + 1200
+        try:
+            while not (output / 'stop').exists():
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                time.sleep(.1)
+        except KeyboardInterrupt:
+            pass
+        with server.lock:
+            report['counts'] = dict(server.counts)
+    report.update(joined=not server.thread.is_alive(), timed_out=timed_out)
+    (output / 'result.json').write_text(json.dumps(report, indent=2))
+    return 2 if timed_out else 0
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Serve the two-image native benchmark on loopback; create OUTPUT/stop to finish.')
+    parser.add_argument('--dual-gif', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    arguments = parser.parse_args()
+    raise SystemExit(serve_dual_gif(arguments.dual_gif, arguments.output))

@@ -1,4 +1,4 @@
-#![cfg(feature = "desktop")]
+#![cfg(feature = "desktop-services")]
 //! Independent processes exercise the production shared-document transactions.
 use pttstella::{
     article_target::ArticleTarget, board_navigation::BoardName, bookmarks, filters, recent_boards,

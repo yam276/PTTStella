@@ -81,17 +81,31 @@ impl Localizer {
     }
     /// Refresh only canonical App status labels. Preserve diagnostic details.
     pub fn relocalize_status(&self, previous: Language, text: &str) -> Option<String> {
-        [
-            "status-offline-preview",
-            "status-offline",
-            "status-connecting",
-            "status-connected",
-            "status-keepalive-on",
-            "status-keepalive-off",
-        ]
-        .into_iter()
-        .find(|key| self.loader_for(previous).get(key) == text)
-        .map(|key| self.loader().get(key))
+        self.relocalize_labels(
+            previous,
+            text,
+            &[
+                "status-offline-preview",
+                "status-offline",
+                "status-connecting",
+                "status-connected",
+                "status-keepalive-on",
+                "status-keepalive-off",
+            ],
+        )
+    }
+    /// Refresh an already displayed canonical label. This is presentation only:
+    /// unknown text and diagnostics with parameters remain in their source form.
+    pub fn relocalize_labels(
+        &self,
+        previous: Language,
+        text: &str,
+        keys: &[&str],
+    ) -> Option<String> {
+        keys.iter()
+            .copied()
+            .find(|key| self.loader_for(previous).get(key) == text)
+            .map(|key| self.loader().get(key))
     }
 }
 

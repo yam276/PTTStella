@@ -1,0 +1,1357 @@
+import { PanelButton, PanelField, PanelReadOnlyText, PanelScrollView, PanelTheme } from "panel.slint";
+export { PanelEdit } from "panel.slint";
+export { LucideIcons } from "lucide-icons.slint";
+import { LucideIcons } from "lucide-icons.slint";
+import { PointerKind, PointerRefresh, PointerStyle } from "pointer-cursor.slint";
+export { PointerKind, PointerRefresh } from "pointer-cursor.slint";
+import { CompositionInput } from "composition-input.slint";
+import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { SettingsPanel, SettingsState } from "settings.slint";
+import { SitesPanel, SitesState } from "sites.slint";
+import { FiltersPanel, FiltersState } from "filters.slint";
+import { BookmarksPanel } from "bookmarks.slint";
+import { DestinationPanel } from "destination.slint";
+export { DestinationState } from "destination.slint";
+export { BookmarksState } from "bookmarks.slint";
+export { FiltersState } from "filters.slint";
+export { SitesState } from "sites.slint";
+export { UiLabels } from "labels.slint";
+import { UiLabels } from "labels.slint";
+export { SettingsState, SettingsMatch, FontSource } from "settings.slint";
+import { LoginPanel } from "login.slint";
+import { AboutPanel } from "about.slint";
+export { AboutState, LicenseDocument } from "about.slint";
+import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
+import { FloatingTools, ToolItem } from "tools.slint";
+import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture, ReplySideMark } from "article.slint";
+import { ReplyNavigationBar } from "reply-navigation.slint";
+import { SelectionRect } from "selection.slint";
+import { MediaPreview } from "media.slint";
+import { MediaHover } from "media-hover.slint";
+
+export { EditorState, DraftItem } from "editor.slint";
+import { NativeEditor, EditorState } from "editor.slint";
+
+export { StationColorState } from "station-color.slint";
+import { StationColor, StationColorState } from "station-color.slint";
+
+export component TerminalWindow inherits Window {
+    in property <bool> article-updates-available;
+    in property <bool> article-updates-visible;
+    in property <bool> article-updates-enabled;
+    in property <bool> article-updates-recovery;
+    in property <int> article-updates-unread;
+    in property <string> article-updates-status;
+    in property <string> article-updates-new-label;
+    out property <bool> article-updates-blocked: root.reply-navigation-blocked || root.find-open;
+    callback article-updates-action(int);
+    callback article-updates-scrolled;
+    in property <bool> reply-navigation-available;
+    in property <bool> reply-navigation-ready;
+    changed reply-navigation-available => { root.tools-updated(); }
+    changed reply-navigation-ready => { root.tools-updated(); }
+    in property <bool> reply-navigation-open;
+    in property <[bool]> reply-navigation-groups;
+    in property <int> reply-navigation-group;
+    in property <string> reply-navigation-count;
+    in property <[ReplySideMark]> reply-side-marks;
+    out property <bool> reply-navigation-focused: root.reply-navigation-open && reply-nav.focused;
+    out property <bool> reply-navigation-opening-blocked: root.find-blocked || root.find-composing || root.context-open || root.context-pending || root.tools-busy || root.paste-reading;
+    out property <bool> reply-navigation-blocked: root.reply-navigation-opening-blocked || root.selection-active || root.selection-dragging;
+    callback reply-navigation-action(int);
+    callback focus-reply-navigation;
+    focus-reply-navigation => {reply-nav.focus-navigation();}
+    changed reply-navigation-focused => {root.keep-alive-changed();root.inline-updated();}
+    callback destination-updated;
+    callback auxiliary-key(int,bool,bool);
+    in property <bool> destination-available;
+    in property <bool> destination-open;
+    in property <bool> destination-active;
+    callback destination-show;
+    callback destination-fill(string);
+    callback destination-stop;
+    changed destination-active=>{root.tools-updated();}
+    changed destination-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    callback app-quit;
+    in property <bool> app-closing;
+    changed app-closing => {root.notice-interaction();root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    callback native-menu-refresh;
+    in property <bool> settings-available;
+    in property <bool> settings-open;
+    in property <bool> sites-embedded;
+    in property <bool> filters-embedded;
+    in property <bool> login-embedded;
+    out property <int> settings-section: root.settings-open && SettingsState.query == "" ? SettingsState.page : -1;
+    changed settings-section => {
+        if root.sites-open && root.sites-embedded && root.settings-section != 4 { SitesState.close-sites(); }
+        if root.filters-open && root.filters-embedded && root.settings-section != 5 { FiltersState.close-filters(); }
+        if root.login-open && root.login-embedded && root.settings-section != 6 { root.login-cancel(); }
+        if root.settings-section == 4 && !root.sites-open { root.sites-show(); }
+        else if root.settings-section == 5 && !root.filters-open { root.filters-show(); }
+        else if root.settings-section == 6 && !root.login-open { root.login-show(); }
+    }
+    callback settings-show;
+    callback settings-composition(bool, bool);
+    callback settings-runtime-updated;
+    changed station-mouse-enabled=>{root.settings-runtime-updated();}
+    changed keep-alive-enabled=>{root.settings-runtime-updated();}
+    changed keep-alive-available=>{root.settings-runtime-updated();}
+    changed vim-label=>{root.settings-runtime-updated();}
+    changed vim-once-available=>{root.settings-runtime-updated();}
+    changed station-mouse-label=>{root.settings-runtime-updated();}
+    changed keep-alive-label=>{root.settings-runtime-updated();}
+    in property <bool> filters-available;
+    in property <bool> filters-open;
+    callback filters-show;
+    in property <int> filter-count;
+    in property <bool> filter-ready;
+    in property <bool> filter-revealed;
+    changed filter-status => {root.tools-updated();}
+    changed filter-ready => {root.tools-updated();}
+    in property <string> filter-label;
+    in property <string> filter-status;
+    callback filter-reveal;
+    callback filter-status-refresh;
+    callback filters-updated;
+    in property <bool> bookmarks-available;
+    in property <bool> bookmarks-open;
+    out property <bool> bookmarks-target-focused: bookmarks-panel.target-focused;
+    out property <bool> bookmarks-list-focused: bookmarks-panel.list-focused;
+    in property <string> bookmarks-label;
+    callback bookmarks-show;
+    callback bookmarks-updated;
+    in property <bool> bookmarks-current-available;
+    in property <bool> bookmarks-capturing;
+    callback bookmarks-capture-current;
+    callback bookmarks-capture-cancel;
+    callback bookmarks-capture-updated;
+    changed bookmarks-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    out property <bool> manager-open:root.sites-open || root.filters-open || root.bookmarks-open || root.destination-open;
+    changed filters-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    in property <bool> sites-available;
+    in property <bool> sites-open;
+    in property <string> sites-label;
+    in-out property <int> station-choice;
+    callback sites-show;
+    callback sites-updated;
+    callback sites-connect(string,int)->bool;
+    changed sites-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+
+    in-out property <int> output-choice;
+    changed settings-open => {SettingsState.active = root.settings-open;root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+
+    out property <bool> station-color-open:StationColorState.open;
+    callback station-color-updated;
+    callback focus-station-color;
+    focus-station-color=>{station-color-view.focus-picker();}
+    callback focus-station-color-actions;
+    focus-station-color-actions=>{station-color-view.focus-actions();}
+    changed station-color-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-color-updated();root.station-mouse-cancel();}
+    out property <bool> editor-open: EditorState.open;
+    in property <bool> editor-mounted;
+    out property <bool> editor-available: EditorState.available;
+    changed editor-available => {root.tools-updated();}
+    out property <SelectionRect> station-draft-entry-bounds: {
+        x: station-draft-entry.x, y: station-draft-entry.y,
+        width: station-draft-entry.visible ? station-draft-entry.width : 0px,
+        height: station-draft-entry.height
+    };
+    out property <bool> editor-focused: EditorState.body-focused || EditorState.title-focused;
+    out property <bool> editor-body-focused: EditorState.body-focused;
+    out property <bool> editor-composing: EditorState.composing;
+    out property <SelectionRect> editor-grid-bounds:{x:editor-view.grid-left,y:editor-view.grid-top,width:editor-view.grid-width,height:editor-view.grid-height};
+    callback focus-editor-dialog;
+    focus-editor-dialog=>{editor-view.focus-dialog();}
+    callback focus-editor-palette;
+    focus-editor-palette=>{editor-view.focus-palette();}
+    callback focus-editor;
+    callback clear-editor-input;
+    focus-editor => { if EditorState.selected {editor-view.focus-body();} }
+    clear-editor-input => { editor-view.clear-input(); }
+    callback editor-key(int,bool);
+    callback editor-edit-key(int);
+    callback editor-title-edit-key(int);
+    editor-title-edit-key(code) => {editor-view.title-edit-key(code);}
+    callback editor-composition(bool);
+    changed editor-open => { root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-color-updated();root.find-state-changed();root.station-mouse-cancel(); }
+    in property <bool> media-available;
+    in property <string> media-auto-label;
+    in property <string> media-auto-help;
+    in property <bool> media-auto-enabled;
+    in-out property <bool> media-auto-choice;
+    callback media-auto-preference(bool);
+    in property <bool> media-hover-open;
+    in property <length> media-hover-x;
+    in property <length> media-hover-y;
+    in property <int> media-hover-position;
+    in-out property <int> media-hover-choice;
+    in property <[string]> media-hover-choices;
+    in property <string> media-hover-label;
+    in property <string> media-hover-help;
+    out property <SelectionRect> media-hover-bounds: {x:hover-card.card-left,y:hover-card.card-top,width:hover-card.card-width,height:hover-card.card-height};
+    out property <bool> media-hover-blocked: !root.media-available || root.terminal-pointer-blocked || root.selection-active
+        || root.keyboard-pending || root.station-mouse-held || (root.pan-mode && !root.article-active)
+        || (root.native-pointer-down && !root.media-hover-open);
+    changed media-hover-blocked => {root.media-updated();}
+    callback media-hover-changed;
+    callback media-hover-preference(int);
+    in property <bool> media-open;
+    in property <bool> media-video;
+    out property <bool> media-video-visible: !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
+    in-out property <float> media-position;
+    in property <float> media-duration;
+    in-out property <float> media-volume;
+    in property <bool> media-muted;
+    in property <string> media-volume-label;
+    in property <string> media-position-label;
+    in property <string> media-mute-label;
+    in property <string> media-unmute-label;
+    callback media-set-volume(float);
+    callback media-set-muted(bool);
+    in property <bool> media-video-software;
+    out property <SelectionRect> media-video-bounds: {x:media-preview.video-left,y:media-preview.video-top,width:media-preview.video-width,height:media-preview.video-height};
+    callback media-seek(float);
+    in property <image> media-image;
+    in property <bool> media-ready;
+    in property <bool> media-animated;
+    in property <bool> media-playing;
+    in property <string> media-key;
+    in property <string> media-url;
+    in property <string> media-status;
+    in property <string> media-copy-label;
+    in property <string> media-save-label;
+    in property <string> media-copy-url-label;
+    in property <string> media-close-label;
+    in property <string> media-retry-label;
+    in property <string> media-motion-label;
+    in property <string> media-external-label;
+    in property <string> media-fit-label;
+    in property <string> media-original-label;
+    in property <string> media-zoom-in-label;
+    in property <string> media-zoom-out-label;
+    out property <string> media-toolbar-tooltip: media-preview.toolbar-tooltip;
+    out property <bool> media-play-allowed: !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
+    changed media-play-allowed => {root.media-updated();}
+    callback media-request(int);
+    callback media-action(int);
+    callback media-updated;
+    callback focus-media;
+    title: root.live-session ? "PTTStella" : (root.session-active ? "PTTStella · 本機連線探針" : "PTTStella · 離線原型");
+    background: #101318;
+    in property <bool> prototype-chrome: true;
+    preferred-width: 1000px;
+    preferred-height: 690px;
+    min-width: 580px;
+    min-height: 360px;
+
+    in property <bool> find-available;
+    in property <bool> find-open;
+    in property <bool> find-composing;
+    in property <string> find-title;
+    in property <string> find-placeholder;
+    in property <string> find-hint;
+    in property <string> find-previous-label;
+    in property <string> find-next-label;
+    in property <string> find-close-label;
+    in property <string> find-status;
+    in property <bool> find-has-matches;
+    in-out property <string> find-query;
+    out property <bool> find-focused: root.find-open && find-input.has-focus;
+    out property <bool> find-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || !root.native-foreground || root.native-composing || root.show-about
+        || root.switching-station || root.login-open || root.login-busy || root.paste-open || root.output-busy;
+    callback find-action(int);
+    callback find-edit(string);
+    callback find-edit-key(int);
+    callback find-redraw;
+    callback find-composition-changed;
+    callback find-state-changed;
+    callback focus-find(bool);
+    callback find-terminal-reveal(int,int);
+    callback terminal-reveal(int,int);
+    changed find-focused => { root.terminal-focus-changed(); }
+    changed find-composing => { root.find-composition-changed(); }
+    changed find-blocked => { root.find-state-changed(); }
+    focus-find(select) => { find-input.focus(); if select { find-input.select-all(); } }
+    find-edit-key(code) => {
+        if code == 0 { find-input.select-all(); }
+        else if code == 1 { find-input.copy(); }
+        else if code == 2 { find-input.cut(); }
+        else if code == 3 { find-input.paste(); }
+        else if code == 4 { find-input.undo(); }
+        else if code == 5 { find-input.redo(); }
+    }
+    find-terminal-reveal(row,col) => {root.terminal-reveal(row,col);}
+    terminal-reveal(row,col) => {
+        viewport.content-y = clamp(viewport.height / 2 - root.raster-height * (row + 0.5) / 24, min(0px, viewport.height - viewport.content-height), 0px);
+        viewport.content-x = clamp(viewport.width / 2 - raster.x - root.raster-width * col / 80, min(0px, viewport.width - viewport.content-width), 0px);
+    }
+
+    in property <bool> article-active;
+    in property <bool> article-station;
+    callback article-keyboard-mode(bool);
+    in property <[ArticleTile]> article-tiles;
+    in property <[InlineArrow]> inline-arrows;
+    in property <[InlinePicture]> inline-pictures;
+    in property <bool> inline-enabled;
+    out property <bool> inline-blocked: root.article-blocked || root.terminal-pointer-blocked || root.reply-navigation-focused || root.selection-active || root.selection-dragging || root.keyboard-pending || root.station-mouse-held;
+    changed inline-blocked=>{root.inline-updated();}
+    changed article-active=>{root.inline-updated();}
+    callback inline-updated;
+    callback inline-pointer(int,int,string);
+    callback inline-context(int,int,string,length,length);
+    callback inline-enter(bool,bool,bool) -> bool;
+    changed keyboard-read-only => {root.inline-updated();}
+    changed keyboard-pending => {root.inline-updated();}
+    changed vim-enabled => {root.inline-updated();root.settings-runtime-updated();}
+    changed native-composing => {root.inline-updated();root.station-color-updated();}
+    in property <image> article-footer;
+    in property <length> article-line-height;
+    in property <length> article-line-width;
+    in property <length> article-body-height;
+    in property <length> article-document-height;
+    in property <length> article-offset-y;
+    in property <length> article-offset-x;
+    out property <bool> article-focused: article-view.focused;
+    changed article-focused => { root.terminal-focus-changed(); root.inline-updated(); }
+    out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
+    changed article-reading-ready => { root.article-session-updated(); }
+    out property <bool> article-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    callback article-layout-changed;
+    callback article-rendered;
+    callback article-session-updated;
+    callback article-load-action(bool);
+    in property <bool> article-load-available;
+    in property <bool> article-load-active;
+    in property <bool> article-load-can-resume;
+    in property <bool> article-load-next-segment;
+    in property <string> article-load-status;
+    callback article-scroll(float,bool);
+    callback article-navigate(int);
+    callback article-scroll-to(bool,float);
+    callback article-zoom-request(float);
+    callback focus-article;
+    focus-article => { article-view.focus-article(); }
+
+    in property <bool> tools-available;
+    in property <bool> tools-open;
+    in property <bool> tools-busy;
+    in property <bool> tools-dragging;
+    in property <bool> tools-visible: true;
+    in property <bool> tools-right-click: true;
+    in property <bool> tools-reduced-motion: true;
+    in property <float> tools-opacity: 1;
+    in property <float> tools-scale: 1;
+    in property <length> tools-x;
+    in property <length> tools-y;
+    in property <bool> tools-compact;
+    out property <float> tools-fan-progress: tools-area.fan-progress;
+    out property <float> tools-ball-visual-scale: tools-area.ball-visual-scale;
+    in property <SelectionRect> tools-panel;
+    in property <length> tools-grid-height;
+    in property <length> tools-action-height;
+    in property <int> tools-category: -1;
+    in property <int> tools-selected;
+    in property <[ToolItem]> tools-categories;
+    in property <[ToolItem]> tools-actions;
+    in property <string> tools-ball-label;
+    out property <bool> tools-source-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> pointer-shift-held: root.pointer-shift;
+    callback native-shift-held() -> bool;
+    callback tools-pointer(int,length,length);
+    callback tools-toggle;
+    callback tools-dismiss(bool);
+    callback tools-category-choose(int);
+    callback tools-action-choose(int);
+    callback tools-action-pointer(int,int);
+    callback tools-key(int,bool);
+    callback tools-updated;
+    callback tools-resized;
+    callback tools-cancel-gesture;
+    callback focus-tools;
+    changed width => { root.tools-resized(); }
+    changed height => { root.tools-resized(); }
+    changed tools-source-blocked => { root.tools-updated(); }
+    in property <image> terminal-image;
+    in property <string> result: "輸入探針只在本機驗證編碼";
+    out property <length> view-width: viewport.width;
+    out property <length> view-height: viewport.height;
+    out property <length> raster-left: viewport.content-x + raster.x;
+    out property <length> raster-top: viewport.content-y + raster.y;
+    in-out property <float> zoom: 1;
+    in property <length> raster-width;
+    in property <length> raster-height;
+    in property <bool> terminal-input;
+    in property <bool> keyboard-read-only;
+    in property <bool> keyboard-pending;
+    in property <bool> vim-available;
+    in property <bool> vim-enabled;
+    in property <bool> vim-once-available;
+    in property <string> vim-label;
+    in property <string> vim-once-label;
+    in property <string> keyboard-label;
+    callback toggle-vim;
+    callback vim-once;
+    callback keyboard-updated;
+    callback reset-keyboard;
+    in property <length> caret-left;
+    in property <length> caret-top;
+    in property <length> caret-height;
+    out property <bool> terminal-input-focused: grid-input.has-focus;
+    callback terminal-focus-changed;
+    callback focus-terminal;
+    callback session-updated;
+    callback geometry-changed;
+    callback submit(string);
+    in property <bool> session-active;
+    in property <string> connection-status;
+    in property <bool> connection-attention;
+    in property <int> connection-phase;
+    out property <bool> notice-mark-ready: status-mark.source.width > 0;
+    callback notice-dismiss;
+    callback notice-publish(string, int);
+    callback notice-interaction;
+    in property <bool> notice-fading;
+    in property <bool> notice-error;
+    in property <duration> notice-fade-duration;
+    out property <bool> notice-hovered: status-touch.has-hover;
+    out property <bool> notice-focused: status-close.has-focus || status-reconnect.has-focus || status-cancel.has-focus;
+    changed notice-hovered => {root.notice-interaction();}
+    changed notice-focused => {root.notice-interaction();}
+    changed tools-reduced-motion => {root.notice-interaction();if root.tools-reduced-motion {root.tools-cancel-gesture();}}
+    private property <bool> shell-persistent-status: root.connection-attention || root.session-warning != "" || root.login-pending || (root.result != "" && root.result != root.connection-status);
+    out property <bool> shell-notice-dismissible: root.input-notice != "" || root.result != root.connection-status;
+    out property <length> shell-toast-height: status-panel.height;
+    out property <length> shell-toast-reconnect-bottom: status-reconnect.absolute-position.y + status-reconnect.height - status-panel.absolute-position.y;
+    out property <bool> shell-toast-message-scrollable: status-scroll.content-height > status-scroll.height;
+    out property <bool> shell-status-visible: !root.prototype-chrome && !root.media-open && !root.editor-open
+        && (root.connection-attention || root.input-notice != "" || root.session-warning != ""
+            || root.result != root.connection-status || root.login-pending);
+    in property <bool> live-session;
+    in property <bool> show-reconnect;
+    in property <bool> switching-station;
+    in property <string> session-warning;
+    in property <[string]> stations;
+    callback switch-station(int);
+    in property <bool> can-reconnect;
+    callback reconnect;
+    callback toggle-fullscreen;
+    in property <bool> macos-shortcuts;
+    function fullscreen-key(text:string,control:bool,meta:bool,alt:bool,shift:bool)->bool {
+        return !alt && !shift && ((text == Key.F11 && !control && !meta)
+            || (root.macos-shortcuts && control && meta && (text == "f" || text == "F")));
+    }
+    callback leave-fullscreen() -> bool;
+    in property <string> input-notice;
+    in property <bool> paste-open;
+    in property <string> paste-title;
+    in property <string> paste-preview;
+    in property <string> paste-cancel-label;
+    in property <string> paste-send-label;
+    callback paste-cancel;
+    callback paste-request;
+    callback paste-confirm;
+    callback show-paste-preview;
+    callback hide-paste-preview(bool);
+    in property <bool> paste-reading;
+    in property <bool> native-foreground;
+    in property <bool> native-composing;
+    in property <bool> native-pointer-down;
+    in property <int> native-pointer-buttons;
+    in property <bool> frame-paint-pending;
+    in property <bool> keep-alive-available;
+    in property <bool> keep-alive-enabled;
+    in property <string> keep-alive-label;
+    out property <bool> keep-alive-surface-ready: !root.app-closing && !root.bookmarks-capturing && !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
+        && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
+        && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
+        && !root.frame-paint-pending && !root.login-open && !root.login-busy
+        && !root.selection-active && !root.selection-dragging && !root.output-busy
+        && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-open && !root.context-pending && !root.tools-busy;
+    callback keep-alive-changed;
+    callback toggle-keep-alive;
+    in property <bool> login-open;
+    in-out property <bool> login-composing;
+    in property <bool> login-busy;
+    in property <bool> login-saved;
+    in property <bool> login-available;
+    in property <bool> login-pending;
+    in property <string> login-label;
+    in property <string> login-title;
+    in property <string> login-account-label;
+    in property <string> login-password-label;
+    in property <string> login-remember-label;
+    in property <string> login-forget-label;
+    in property <string> login-cancel-label;
+    in property <string> login-cancel-attempt-label;
+    in property <string> login-message;
+    in-out property <string> login-account;
+    callback login-show;
+    callback login-submit(string, string, bool);
+    callback login-cancel;
+    callback login-forget;
+    callback login-updated;
+    callback show-login-popup;
+    callback hide-login-popup(bool);
+    callback clear-login-password;
+    callback login-limit-text(string, int) -> string;
+    in property <[SelectionRect]> selection-rects;
+    in property <bool> selection-active;
+    in property <bool> selection-rows-ready;
+    in property <bool> selection-dragging;
+    in property <bool> output-available;
+    in property <bool> output-busy;
+    changed output-busy=>{root.sites-updated();root.filters-updated();root.bookmarks-updated();}
+    callback output-idle;
+    in property <bool> navigation-busy;
+    in property <[SelectionRect]> navigation-rects;
+    in property <PointerKind> pointer-cursor;
+    in property <string> pointer-url;
+    out property <bool> context-interaction-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+        || root.show-about || root.switching-station
+        || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
+    out property <bool> context-source-blocked: root.context-interaction-blocked || root.frame-paint-pending;
+    out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
+    out property <bool> context-focus-restorable: !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && root.native-foreground && !root.native-composing
+        && !root.show-about && !root.switching-station && !root.login-open && !root.login-busy && !root.paste-open && !root.paste-reading;
+    in property <bool> context-open;
+    in property <bool> context-pending;
+    in property <[MenuEntry]> context-entries;
+    in property <string> context-target;
+    in property <int> context-selected;
+    in property <length> context-x;
+    in property <length> context-y;
+    callback context-pointer(int,length,length);
+    callback context-dismiss(bool);
+    out property <length> terminal-origin-x: terminal-box.x;
+    out property <length> terminal-origin-y: terminal-box.y;
+    callback context-updated;
+    callback context-key(int,bool);
+    callback context-choose(int);
+    callback focus-context;
+    in-out property <bool> pan-mode;
+    callback grid-pointer(int, length, length, bool);
+    callback grid-wheel(float) -> bool;
+    callback link-activated(string);
+    in property <bool> station-mouse-available;
+    in property <bool> station-mouse-enabled;
+    in property <bool> station-mouse-held;
+    in property <string> station-mouse-label;
+    in property <string> station-mouse-status;
+    out property <bool> station-pointer-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+        || root.show-about || root.switching-station || root.login-open || root.login-busy
+        || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
+    callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;
+    callback station-wheel(length, length, float, bool, bool, bool, bool) -> bool;
+    callback station-mouse-updated;
+    callback station-mouse-cancel;
+    callback toggle-station-mouse;
+    callback clear-selection;
+    callback copy-selection(bool);
+    callback output-action(int);
+    callback output-updated;
+    callback output-geometry-changed;
+    callback paste-updated;
+    private property <length> physical-pixel: 1phx;
+    private property <bool> show-about: false;
+    out property <bool> about-open: root.show-about;
+    callback about-show;
+    callback about-close;
+    about-show => {
+        if !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open
+            && !root.station-color-open && !root.media-open && !root.login-open && !root.paste-open {
+            root.show-about = true;
+            about-layer.focus-panel();
+        }
+    }
+    about-close => {
+        root.show-about = false;
+        if root.context-focus-restorable { root.focus-terminal(); }
+    }
+    private property <string> login-password;
+    private property <bool> login-remember;
+    private property <bool> pointer-shift;
+
+    changed view-width => { root.context-updated();root.station-color-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed view-height => { root.context-updated();root.station-color-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed terminal-input-focused => { root.terminal-focus-changed(); }
+    changed keep-alive-surface-ready => { root.keep-alive-changed(); }
+    changed switching-station => {root.station-color-updated(); root.session-updated(); }
+    changed zoom => {
+        root.tools-cancel-gesture();
+        root.station-mouse-cancel();
+        viewport.content-x = 0px;
+        viewport.content-y = 0px;
+        root.geometry-changed();
+        root.article-layout-changed();
+    }
+    changed article-blocked => { root.article-session-updated(); root.inline-updated(); }
+    changed native-foreground => {root.station-color-updated(); root.article-session-updated(); root.inline-updated(); }
+    changed physical-pixel => { root.tools-cancel-gesture(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed pan-mode => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed terminal-pointer-blocked => { root.output-updated(); }
+    changed raster-left => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed raster-top => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed station-pointer-blocked => { root.station-mouse-updated(); }
+    changed context-source-blocked => { root.context-updated();root.station-color-updated(); }
+
+    FocusScope {
+        width: parent.width;
+        height: parent.height;
+        visible: !root.media-open;
+        capture-key-released(event) => {
+            if root.fullscreen-key(event.text,event.modifiers.control,event.modifiers.meta,event.modifiers.alt,event.modifiers.shift) {return accept;}
+            if event.text == Key.Return && root.inline-enter(false,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
+            return reject;
+        }
+        capture-key-pressed(event) => {
+            if root.fullscreen-key(event.text,event.modifiers.control,event.modifiers.meta,event.modifiers.alt,event.modifiers.shift) {
+                if !event.repeat {root.toggle-fullscreen();}
+                return accept;
+            }
+            if event.text == Key.Return && root.inline-enter(true,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
+            return reject;
+        }
+        key-pressed(event) => {
+            if (event.text == Key.Escape && root.leave-fullscreen()) {
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: root.prototype-chrome ? 12px : 0px;
+            spacing: root.prototype-chrome ? 8px : 0px;
+
+            if root.prototype-chrome: HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.article-active ? UiLabels.article-heading : "PTTStella  /  80 × 24";
+                    color: #e3e8ee;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Button { text: "100%"; clicked => { root.zoom = 1; } }
+                Button { text: "125%"; clicked => { root.zoom = 1.25; } }
+                Button { text: "150%"; clicked => { root.zoom = 1.5; } }
+                Button { text: UiLabels.fullscreen; clicked => { root.toggle-fullscreen(); } }
+                if EditorState.available: Button {text:UiLabels.local-drafts;clicked=>{EditorState.action(0);} }
+                if root.sites-available: Button {text:root.sites-label;clicked=>{root.sites-show();}}
+                Button { text: UiLabels.about; clicked => { root.about-show(); } }
+            }
+            if root.prototype-chrome && root.media-available: HorizontalLayout {
+                spacing:8px;
+                Text {text:root.media-hover-help;color:#a7b6c8;overflow:elide;horizontal-stretch:1;vertical-alignment:center;}
+                ComboBox {
+                    preferred-width:120px;max-width:150px;
+                    accessible-label:root.media-hover-label;model:root.media-hover-choices;
+                    current-index <=> root.media-hover-choice;enabled:!root.output-busy;
+                    selected(value)=>{root.media-hover-preference(self.current-index);}
+                }
+                if root.media-hover-choice != root.media-hover-position: Button {
+                    text:root.media-retry-label;enabled:!root.output-busy;
+                    clicked=>{root.media-hover-preference(root.media-hover-choice);}
+                }
+            }
+
+            if root.prototype-chrome && root.media-available: HorizontalLayout {
+                spacing:8px;
+                CheckBox {
+                    text:root.media-auto-label;checked <=> root.media-auto-choice;enabled:!root.output-busy;
+                    toggled => {root.media-auto-preference(self.checked);}
+                }
+                Text {text:root.media-auto-help;color:#a7b6c8;overflow:elide;horizontal-stretch:1;vertical-alignment:center;}
+                if root.media-auto-choice != root.media-auto-enabled: Button {
+                    text:root.media-retry-label;enabled:!root.output-busy;
+                    clicked=>{root.media-auto-preference(root.media-auto-choice);}
+                }
+            }
+
+            terminal-box := Rectangle {
+                vertical-stretch: 1;
+                background: black;
+                clip: true;
+                viewport := Flickable {
+                    visible: !root.article-active;
+                    width: parent.width;
+                    height: parent.height;
+                    content-width: max(self.width, root.raster-width);
+                    content-height: max(self.height, root.raster-height);
+                    interactive: (!root.output-available || root.pan-mode) && (self.content-width > self.width || self.content-height > self.height);
+                    raster := Image {
+                        x: (viewport.content-width - self.width) / 2;
+                        y: (viewport.content-height - self.height) / 2;
+                        width: root.raster-width;
+                        height: root.raster-height;
+                        source: root.terminal-image;
+                        image-fit: fill;
+                    }
+                    for span in root.selection-rects: Rectangle {
+                        x: raster.x + span.x;
+                        y: raster.y + span.y;
+                        width: span.width;
+                        height: span.height;
+                        background: #4387d655;
+                    }
+                    for span in root.navigation-rects: Rectangle {
+                        x: raster.x + span.x;
+                        y: raster.y + span.y;
+                        width: span.width;
+                        height: span.height;
+                        background: #4387d647;
+                        border-color: #d9ae5b;
+                        border-width: 1px;
+                        Rectangle { x: 0px; width: 3px; height: parent.height; background: #d9ae5b; }
+                        Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
+                    }
+                    grid-input := CompositionInput {
+                        enabled: !root.editor-open && !root.station-color-open && !root.settings-open && !root.manager-open && !root.login-open;
+                        visible: root.terminal-input;
+                        label: UiLabels.terminal-input;
+                        anchor-x: raster.x + root.caret-left;
+                        anchor-y: raster.y + root.caret-top;
+                        area-left: -viewport.content-x;
+                        area-top: -viewport.content-y;
+                        area-width: viewport.width;
+                        area-height: viewport.height;
+                        row-height: root.caret-height;
+                        text-cursor-width: root.prototype-chrome ? 1px : 0px;
+                        read-only: root.keyboard-read-only;
+                    }
+                    if root.terminal-input && !root.live-session && !root.terminal-input-focused: Rectangle {
+                        x: grid-input.x;
+                        y: grid-input.y + grid-input.height - 2px;
+                        width: root.caret-height / 2;
+                        height: 2px;
+                        background: #53b7e8;
+                    }
+                }
+                    TouchArea {
+                        width: viewport.width;
+                        height: viewport.height;
+                        enabled: root.terminal-input && !root.pan-mode && !root.article-active;
+                        mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selection-dragging);
+                        changed has-hover => { if (!self.has-hover) { PointerRefresh.inside = false; root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
+                        pointer-event(event) => {
+                            if (PointerRefresh.replaying) { return; }
+                            PointerRefresh.x = self.absolute-position.x + self.mouse-x;
+                            PointerRefresh.y = self.absolute-position.y + self.mouse-y;
+                            PointerRefresh.inside = event.kind != PointerEventKind.cancel;
+                            root.pointer-shift = event.modifiers.shift;
+                            let button = event.button == PointerEventButton.left ? 1 : event.button == PointerEventButton.middle ? 2 : event.button == PointerEventButton.right ? 3 : 0;
+                            if (event.kind == PointerEventKind.cancel) {
+                                root.context-pointer(3, self.mouse-x, self.mouse-y);
+                                root.station-mouse-cancel();
+                                root.grid-pointer(3, self.mouse-x, self.mouse-y, event.modifiers.shift);
+                            } else if (event.kind == PointerEventKind.move) {
+                                if (!root.station-pointer(1, 0, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    root.grid-pointer(self.pressed ? 1 : 4, self.mouse-x, self.mouse-y, event.modifiers.shift);
+                                }
+                            } else if (event.kind == PointerEventKind.down) {
+                                if (!root.station-pointer(0, button, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    if (button == 1) { root.grid-pointer(0, self.mouse-x, self.mouse-y, event.modifiers.shift); }
+                                    else if (button == 3) { root.context-pointer(0, self.mouse-x, self.mouse-y); }
+                                }
+                            } else if (event.kind == PointerEventKind.up) {
+                                if (!root.station-pointer(2, button, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    if (button == 1) { root.grid-pointer(2, self.mouse-x, self.mouse-y, event.modifiers.shift); }
+                                    else if (button == 3) { root.context-pointer(2, self.mouse-x, self.mouse-y); }
+                                }
+                            }
+                        }
+                        double-clicked => { root.grid-pointer(6, self.mouse-x, self.mouse-y, root.pointer-shift); }
+                        clicked => { grid-input.focus-input(); }
+                        scroll-event(event) => {
+                            if (root.terminal-pointer-blocked) { return reject; }
+                            if (event.delta-y != 0px && !event.modifiers.meta && !event.modifiers.shift) {
+                                if (event.modifiers.control) {
+                                    root.zoom = clamp(root.zoom + (event.delta-y > 0px ? 0.25 : -0.25),0.25,4);
+                                    return accept;
+                                }
+                                if (viewport.content-width > viewport.width || viewport.content-height > viewport.height) { return reject; }
+                                if (root.station-wheel(self.mouse-x, self.mouse-y, event.delta-y / 1px, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) { return accept; }
+                                if (!event.modifiers.alt && root.grid-wheel(event.delta-y / 1px)) { return accept; }
+                            }
+                            return reject;
+                        }
+                    }
+                article-view := ArticleViewport {
+                    visible: root.article-active;
+                    width: parent.width; height: parent.height;
+                    tiles: root.article-tiles; footer: root.article-footer;
+                    inline-arrows:root.inline-arrows;inline-pictures:root.inline-pictures;inline-enabled:root.inline-enabled;
+                    reply-side-marks:root.reply-side-marks;
+                    inline-pointer(kind,index,stamp)=>{root.inline-pointer(kind,index,stamp);}
+                    inline-context(kind,index,stamp,x,y)=>{root.inline-context(kind,index,stamp,x,y);}
+                    line-height: root.article-line-height; line-width: root.article-line-width;
+                    body-height: root.article-body-height; document-height: root.article-document-height;
+                    offset-y: root.article-offset-y; offset-x: root.article-offset-x;
+                    blocked: root.article-blocked;
+                    native-input: root.terminal-input;
+                    read-only: root.keyboard-read-only;
+                    selection: root.selection-rects;
+                    pointer-cursor: root.pointer-cursor;
+                    selecting: root.selection-dragging;
+                    pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.grid-pointer(kind,x,y,shift); }
+                    context-pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.context-pointer(kind,x,y); }
+                    layout-changed => { root.article-layout-changed(); }
+                    scroll(delta,horizontal) => { root.article-scroll(delta,horizontal); }
+                    navigate(code) => { root.article-navigate(code); }
+                    scroll-to(vertical,fraction) => { root.article-scroll-to(vertical,fraction); }
+                    zoom-request(delta) => { root.article-zoom-request(delta); }
+                }
+                if root.pointer-url != "": Rectangle {
+                    y: parent.height - 26px;
+                    width: parent.width;
+                    height: 26px;
+                    background: PanelTheme.surface;
+                    Text { text: root.pointer-url; color: #e3e8ee; overflow: elide; vertical-alignment: center; }
+                }
+                hover-card := MediaHover {
+                    visible:root.media-hover-open;width:parent.width;height:parent.height;
+                    pixels:root.media-image;ready:root.media-ready;status:root.media-status;
+                    follow:root.media-hover-position==1;cursor-x:root.media-hover-x;cursor-y:root.media-hover-y;
+                }
+            }
+
+            if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
+                spacing: 8px;
+                compose := LineEdit {
+                    placeholder-text: "在此測試繁中輸入法與貼上";
+                    horizontal-stretch: 1;
+                    accepted => { root.submit(self.text); }
+                }
+                Button { text: "驗證輸入"; clicked => { root.submit(compose.text); } }
+            }
+            if root.prototype-chrome && root.live-session: HorizontalLayout {
+                spacing: 8px;
+                selector := ComboBox {
+                    model: root.stations;
+                    current-index <=> root.station-choice;
+                    enabled: !root.switching-station;
+                }
+                Button {
+                    text: UiLabels.connect;
+                    enabled: !root.switching-station && selector.current-index >= 0;
+                    clicked => { root.switch-station(selector.current-index); }
+                }
+                Text {
+                    text: root.session-warning;
+                    color: #f0c987;
+                    overflow: elide;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+            }
+            if root.prototype-chrome && root.output-available: HorizontalLayout {
+                spacing: 8px;
+                output-selector := ComboBox {
+                    model: UiLabels.output-actions;
+                    current-index <=> root.output-choice;
+                    enabled: !root.output-busy;
+                }
+                Button { text: UiLabels.execute; enabled: !root.output-busy && (output-selector.current-index > 1 || root.selection-active) && ((output-selector.current-index != 3 && output-selector.current-index != 5) || root.selection-rows-ready); clicked => { root.output-action(output-selector.current-index); } }
+                if !root.article-active: Button { text: root.pan-mode ? UiLabels.select-text : UiLabels.drag-scroll; clicked => { root.pan-mode = !root.pan-mode; } }
+            }
+            if root.prototype-chrome && root.terminal-input: HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: root.vim-label;
+                    enabled: root.vim-available;
+                    clicked => { root.toggle-vim(); }
+                }
+                if root.vim-enabled: Button {
+                    text: root.vim-once-label;
+                    enabled: root.vim-once-available;
+                    clicked => { root.vim-once(); }
+                }
+                Text {
+                    text: root.keyboard-label;
+                    color: #f0c987;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+            }
+            if root.prototype-chrome && root.station-mouse-available: HorizontalLayout {
+                spacing: 8px;
+                Button { text: root.station-mouse-label; clicked => { root.toggle-station-mouse(); } }
+                Text { text: root.station-mouse-status; color: #b7c1ce; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+            }
+            if root.prototype-chrome: HorizontalLayout {
+                height:32px;
+                spacing: 8px;
+                Text {
+                    text: root.result;
+                    color: #b7c1ce;
+                    min-width:0px;
+                    overflow: elide;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                if root.input-notice != "": Text {
+                    text: root.input-notice;
+                    color: #f0c987;
+                    overflow: elide;
+                    min-width:0px;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                if root.prototype-chrome && root.show-reconnect: Button {
+                    text: UiLabels.reconnect;
+                    enabled: root.can-reconnect;
+                    clicked => { root.reconnect(); }
+                }
+                if root.prototype-chrome && root.keep-alive-available: Button {
+                    text: root.keep-alive-label;
+                    clicked => { root.toggle-keep-alive(); }
+                }
+                if root.prototype-chrome && root.login-available: Button {
+                    text: root.login-label;
+                    enabled: !root.login-busy;
+                    clicked => { root.login-show(); }
+                }
+                if root.prototype-chrome && root.login-pending: Button {
+                    text: root.login-cancel-attempt-label;
+                    clicked => { root.login-cancel(); }
+                }
+            }
+        }
+    }
+    // Reply navigation opens from the context menu or floating tools and
+    // floats above the article, so it never resizes the reading grid.
+    Rectangle {
+        visible:root.reply-navigation-open;
+        x:12px;y:12px;width:min(760px,root.width - 24px);
+        height:reply-nav.preferred-height + 16px;
+        background:PanelTheme.surface;border-width:1px;border-color:PanelTheme.border;border-radius:6px;
+        TouchArea {width:parent.width;height:parent.height;clicked=>{}}
+        reply-nav := ReplyNavigationBar {
+            x:8px;y:8px;width:parent.width - 16px;height:parent.height - 16px;
+            visible:root.reply-navigation-open;
+            blocked:root.reply-navigation-blocked || !root.reply-navigation-ready;
+            groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
+            action(code)=>{root.reply-navigation-action(code);}
+        }
+    }
+    status-panel := Rectangle {
+        visible: root.shell-status-visible;
+        x: (root.width - self.width) / 2; y: self.outer-margin;
+        width: min(620px, root.width - 32px);
+        private property <length> outer-margin: 20px;
+        private property <length> inset: 20px;
+        private property <length> mark-size: root.width < 480px ? 34px : 44px;
+        private property <length> action-height: root.can-reconnect || root.login-pending ? 40px : 0px;
+        private property <length> reading-space: reading-panel.visible ? reading-panel.height + 8px : 0px;
+        height: min(root.height - 2 * self.outer-margin - self.reading-space,
+            2 * self.inset + max(self.mark-size, status-copy.preferred-height + self.action-height));
+        background: @linear-gradient(110deg, #122a43 0%, #0c1c30 72%);
+        border-width: 1px; border-color: #b69a59; border-radius: 4px;
+        drop-shadow-color: #000000aa; drop-shadow-offset-y: 12px; drop-shadow-blur: 32px;
+        clip: true;
+        opacity: root.notice-fading && !root.shell-persistent-status ? 0 : 1;
+        animate opacity {duration: root.notice-fading ? root.notice-fade-duration : 0ms;}
+        status-touch := TouchArea {
+            width: parent.width; height: parent.height;
+            clicked => {}
+            Rectangle {
+                x: 0; y: 0; width: 4px; height: parent.height;
+                background: root.notice-error || root.connection-phase == 2 ? #e6a08a : #e7c46a;
+            }
+            HorizontalLayout {
+                width: parent.width; height: parent.height;
+                padding: status-panel.inset; spacing: 16px;
+                Rectangle {
+                    width: status-panel.mark-size;
+                    height: self.width;
+                    border-radius: self.width / 2;
+                    clip: true;
+                    status-mark := Image {
+                        source: @image-url("../../../assets/icons/pttstella.png");
+                        width: parent.width; height: parent.height; image-fit: cover;
+                    }
+                }
+                VerticalLayout {
+                    alignment: start;
+                    status-scroll := PanelScrollView {
+                        // Long messages can scroll without moving the actions out of view.
+                        height: min(status-copy.preferred-height,
+                            max(0px, status-panel.height - 2 * status-panel.inset - status-panel.action-height));
+                        content-width: self.visible-width;
+                        content-height: status-copy.preferred-height;
+                        status-copy := VerticalLayout {
+                            width: status-scroll.visible-width;
+                            height: self.preferred-height;
+                            spacing: 6px; alignment: start;
+                            Text { text: "PTTSTELLA"; color: #e7c46a; font-size: 11px; font-weight: 700; }
+                            Text {
+                                text: !root.connection-attention ? UiLabels.toast-title :
+                                    root.connection-phase == 1 ? UiLabels.toast-connecting :
+                                    root.connection-phase == 2 ? UiLabels.toast-error : UiLabels.toast-disconnected;
+                                color: #ebe7dc; font-size: 21px; font-weight: 650; wrap: word-wrap;
+                            }
+                            if root.connection-attention: Text { text: root.connection-status; color: #ebe7dc; font-size: 16px; wrap: word-wrap; }
+                            if root.result != "" && root.result != root.connection-status: Text {
+                                text: root.result; color: #ebe7dc; font-size: 16px; wrap: word-wrap;
+                            }
+                            if root.input-notice != "": Text {
+                                text: root.input-notice; color: root.notice-error ? #f4b1a8 : #ebe7dc; font-size: 16px; wrap: word-wrap;
+                                opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
+                                animate opacity { duration: root.notice-fading ? root.notice-fade-duration : 0ms; }
+                            }
+                            if root.session-warning != "": Text { text: root.session-warning; color: #e7ca87; font-size: 16px; wrap: word-wrap; }
+                        }
+                    }
+                    HorizontalLayout {
+                        visible: root.can-reconnect || root.login-pending;
+                        height: status-panel.action-height;
+                        padding-top: self.visible ? 6px : 0px;
+                        alignment: start; spacing: 8px;
+                        status-reconnect := PanelButton {
+                            visible: root.can-reconnect; enabled: self.visible; primary: true;
+                            text: UiLabels.reconnect; clicked => { root.reconnect(); }
+                        }
+                        status-cancel := PanelButton {
+                            visible: root.login-pending; enabled: self.visible; primary: true;
+                            text: root.login-cancel-attempt-label; clicked => { root.login-cancel(); }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    width: root.shell-notice-dismissible ? 32px : 0px;
+                    alignment: start;
+                    close-control := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        visible: root.shell-notice-dismissible;
+                        width: 32px; height: 32px;
+                        Rectangle {
+                            background: close-control.has-hover ? PanelTheme.hover : PanelTheme.control;
+                            border-color: status-close.has-focus || close-control.has-hover ? PanelTheme.gold : PanelTheme.border;
+                            border-width: 1px; border-radius: 3px;
+                            Image { width: 16px; height: 16px; source: LucideIcons.x; colorize: PanelTheme.gold; }
+                        }
+                        status-close := Button {
+                            enabled: close-control.visible;
+                            width: parent.width; height: parent.height; opacity: 0;
+                            accessible-label: UiLabels.toast-dismiss;
+                            clicked => {
+                                let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
+                                root.notice-dismiss();
+                                if restore { root.focus-terminal(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Article controls float above the viewport so late capabilities cannot
+    // move acknowledged text, hit targets or an in-progress selection.
+    reading-panel := Rectangle {
+        visible: !root.media-open && !root.find-open && !root.reply-navigation-open
+            && (root.bookmarks-capturing || (root.article-load-available && (root.article-load-active || root.article-load-can-resume))
+                || root.article-updates-visible);
+        x: root.width - self.width - 12px;
+        y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
+        width: min(430px, root.width - 24px);
+        height: reading-controls.preferred-height;
+        background: #0c1c30;
+        border-color: #786640;
+        border-width: 1px;
+        border-radius: 8px;
+        TouchArea {}
+        reading-controls := VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+            if root.bookmarks-capturing: HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: UiLabels.bookmark-capture; color: #ebe7dc; vertical-alignment: center;
+                    horizontal-stretch: 1; min-width: 0px; overflow: elide;
+                }
+                PanelButton { text: UiLabels.cancel; clicked => { root.bookmarks-capture-cancel(); } }
+            }
+            if root.article-load-available && (root.article-load-active || root.article-load-can-resume): HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.article-load-status; color: #ebe7dc; vertical-alignment: center;
+                    horizontal-stretch: 1; min-width: 0px; overflow: elide;
+                }
+                PanelButton {
+                    text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load;
+                    clicked => { root.article-load-action(!root.article-load-active); }
+                }
+            }
+            if root.article-updates-visible: VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: root.article-updates-status; color: #ebe7dc; overflow: elide;
+                }
+                if root.article-updates-unread > 0 || root.article-updates-recovery: HorizontalLayout {
+                    spacing: 6px;
+                    if root.article-updates-unread > 0: PanelButton {
+                        text: root.article-updates-new-label; enabled: !root.article-updates-blocked;
+                        min-width: 0px; clicked => { root.article-updates-action(1); }
+                    }
+                    if root.article-updates-recovery: PanelButton {
+                        text: UiLabels.updates-station; enabled: !root.article-updates-blocked;
+                        min-width: 0px; clicked => { root.article-updates-action(2); }
+                    }
+                }
+            }
+        }
+    }
+    station-draft-entry := PanelButton {
+        visible: EditorState.station-editor && !root.article-active && !root.editor-open
+            && !root.manager-open && !root.settings-open && !root.media-open && !root.login-open;
+        x: root.width - self.width - 12px;
+        y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
+        width: min(self.preferred-width, root.width - 24px);
+        height: self.preferred-height;
+        text: UiLabels.local-drafts;
+        enabled: !root.tools-source-blocked && !root.tools-busy && !root.context-open && !root.context-pending
+            && !root.switching-station && !root.frame-paint-pending;
+        clicked => { EditorState.action(0); }
+    }
+    tools-area := FloatingTools {
+        visible: root.tools-available;
+        width: root.width; height: root.height;
+        opened: root.tools-open; dragging: root.tools-dragging;
+        visible-ball: root.tools-visible || root.tools-open;
+        blocked: root.tools-source-blocked;
+        compact: root.tools-compact;
+        attention: root.connection-attention;
+        status: root.connection-status; reduced-motion: root.tools-reduced-motion;
+        ball-opacity: root.tools-opacity; scale: root.tools-scale;
+        ball-x: root.tools-x; ball-y: root.tools-y;
+        panel-x: root.tools-panel.x; panel-y: root.tools-panel.y;
+        panel-width: root.tools-panel.width; panel-height: root.tools-panel.height;
+        grid-height: root.tools-grid-height;
+        action-height: root.tools-action-height;
+        category: root.tools-category; selected: root.tools-selected;
+        categories: root.tools-categories; actions: root.tools-actions;
+        ball-label: root.tools-ball-label;
+        ball-pointer(kind,x,y) => { root.tools-pointer(kind,x,y); }
+        toggle => { root.tools-toggle(); }
+        choose-category(index) => { root.tools-category-choose(index); }
+        choose-action(index) => { root.tools-action-choose(index); }
+        action-pointer(kind,index) => { root.tools-action-pointer(kind,index); }
+        dismiss(focus) => { root.tools-dismiss(focus); }
+        key(code,repeat) => { root.tools-key(code,repeat); }
+    }
+    focus-tools => { tools-area.focus-tools(); }
+    context-area := ContextMenuOverlay {
+        visible: root.context-open;
+        width: root.width;
+        height: root.height;
+        entries: root.context-entries;
+        target: root.context-target;
+        selected: root.context-selected;
+        anchor-x: terminal-box.x + root.context-x;
+        anchor-y: terminal-box.y + root.context-y;
+        choose(index) => { root.context-choose(index); }
+        dismiss(focus) => { root.context-dismiss(focus); }
+        key(code, repeat) => { root.context-key(code, repeat); }
+    }
+    focus-context => { context-area.focus-menu(); }
+
+    about-layer := AboutPanel {
+        visible: root.show-about;
+        width: root.width;
+        height: root.height;
+        close => { root.about-close(); }
+    }
+
+    Rectangle {
+        visible: root.find-open;
+        x: root.width - self.width - 12px;
+        y: 44px;
+        width: min(560px, root.width - 24px);
+        height: find-controls.preferred-height;
+        background: PanelTheme.surface;
+        border-width: 1px;
+        border-color: PanelTheme.border;
+        border-radius: 6px;
+        find-controls := VerticalLayout {
+            padding: 10px;
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 6px;
+                find-input := PanelField {
+                    text <=> root.find-query;
+                    placeholder-text: root.find-placeholder;
+                    accessible-label: root.find-title;
+                    horizontal-stretch: 1;
+                    edited(text) => { root.find-edit(text); }
+                    key-pressed(event) => {
+                        if (!root.find-composing && !root.find-blocked) {
+                            if (event.text == Key.Return) { root.find-action(event.modifiers.shift ? 1 : 2); return accept; }
+                            if (event.text == Key.Escape) { root.find-action(3); return accept; }
+                        }
+                        return reject;
+                    }
+                }
+                PanelButton { text: root.find-previous-label; icon: LucideIcons.arrow-up; icon-only: true; enabled: root.find-has-matches; clicked => { root.find-action(1); } }
+                PanelButton { text: root.find-next-label; icon: LucideIcons.arrow-down; icon-only: true; enabled: root.find-has-matches; clicked => { root.find-action(2); } }
+                PanelButton { text: root.find-close-label; icon: LucideIcons.x; icon-only: true; clicked => { root.find-action(3); } }
+            }
+            Text { text: root.find-status; color: #e3e8ee; }
+            Text { text: root.find-hint; color: #b6c4d5; font-size: 11px; wrap: word-wrap; }
+        }
+    }
+
+    focus-media => {media-preview.focus-preview();}
+    media-preview := MediaPreview {
+        x:0px;y:0px;width:root.width;height:root.height;visible:root.media-open;
+        zoom-in-label: root.media-zoom-in-label; zoom-out-label: root.media-zoom-out-label;
+        busy:root.output-busy;copy-label:root.media-copy-label;save-label:root.media-save-label;copy-url-label:root.media-copy-url-label;
+        video:root.media-video;software-video:root.media-video-software;position <=> root.media-position;duration:root.media-duration;seek(value)=>{root.media-seek(value);}
+        volume <=> root.media-volume;
+        muted: root.media-muted;
+        volume-label: root.media-volume-label;
+        position-label: root.media-position-label;
+        mute-label: root.media-mute-label;
+        unmute-label: root.media-unmute-label;
+        audio-controls-enabled: root.media-ready && root.media-play-allowed;
+        set-volume(value) => { root.media-set-volume(value); }
+        set-muted(value) => { root.media-set-muted(value); }
+        pixels:root.media-image;source-key:root.media-key;url:root.media-url;status:root.media-status;
+        ready:root.media-ready;animated:root.media-animated;playing:root.media-playing;foreground:root.native-foreground;
+        close-label:root.media-close-label;retry-label:root.media-retry-label;motion-label:root.media-motion-label;
+        external-label:root.media-external-label;fit-label:root.media-fit-label;original-label:root.media-original-label;
+        action(code)=>{root.media-action(code);}
+    }
+
+    show-login-popup => {
+        root.login-password = "";
+        root.login-remember = false;
+        if !root.login-embedded { login-popup.focus-panel(); }
+    }
+    hide-login-popup(restore-focus) => {
+        root.login-password = "";
+        root.login-remember = false;
+        if (restore-focus && !root.settings-open) { root.focus-terminal(); }
+    }
+    clear-login-password => { root.login-password = ""; root.login-composing = false; }
+    login-popup := LoginPanel {
+        visible: root.login-open && !root.login-embedded;
+        width: parent.width;
+        height: parent.height;
+        composing: root.login-composing;
+        title: root.login-title;
+        account-label: root.login-account-label;
+        password-label: root.login-password-label;
+        remember-label: root.login-remember-label;
+        forget-label: root.login-forget-label;
+        cancel-label: root.login-cancel-label;
+        submit-label: root.login-label;
+        message: root.login-message;
+        account <=> root.login-account;
+        password <=> root.login-password;
+        remember <=> root.login-remember;
+        busy: root.login-busy;
+        saved: root.login-saved;
+        submit(account, password, remember) => { root.login-submit(account, password, remember); }
+        cancel => { root.login-cancel(); }
+        forget => { root.login-forget(); }
+        limit-text(text, maximum) => { return root.login-limit-text(text, maximum); }
+    }
+
+    show-paste-preview => { paste-dialog.show(); }
+    focus-terminal => { if root.editor-open { root.focus-editor(); } else if root.article-active { root.focus-article(); } else if (root.terminal-input) { grid-input.focus-input(); } }
+    hide-paste-preview(restore-focus) => {
+        paste-dialog.close();
+        if (restore-focus) { root.focus-terminal(); }
+    }
+
+    paste-dialog := PopupWindow {
+        width: min(540px, root.width - 32px);
+        height: min(380px, root.height - 32px);
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        close-policy: PopupClosePolicy.no-auto-close;
+        forward-focus: cancel-paste;
+
+        FocusScope {
+            width: parent.width;
+            height: parent.height;
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.paste-cancel();
+                    return accept;
+                }
+                return reject;
+            }
+            Rectangle {
+                width: parent.width;
+                height: parent.height;
+                background: PanelTheme.surface;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: PanelTheme.gold-border;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: root.paste-title;
+                        color: #e3e8ee;
+                        font-weight: 700;
+                    }
+                    PanelReadOnlyText {
+                        text: root.paste-preview;
+                        label: root.paste-title;
+                    }
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+                        cancel-paste := PanelButton {
+                            text: root.paste-cancel-label;
+                            clicked => { root.paste-cancel(); }
+                        }
+                        PanelButton {
+                            text: root.paste-send-label; primary: true;
+                            clicked => { root.paste-confirm(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    editor-view := NativeEditor { visible:EditorState.open; width:parent.width;height:parent.height; }
+    station-color-view := StationColor {visible:StationColorState.open;width:root.width;height:root.height;}
+
+    SettingsPanel {
+        visible: root.settings-open; width: parent.width; height: parent.height;
+        zoom: root.zoom; station-mouse-status: root.station-mouse-status;
+        sites-shown: root.sites-open && root.sites-embedded;
+        filters-shown: root.filters-open && root.filters-embedded;
+        login-shown: root.login-open && root.login-embedded;
+        if root.settings-section == 4 && root.sites-open && root.sites-embedded: SitesPanel {
+            embedded: true; height: 520px;
+        }
+        if root.settings-section == 5 && root.filters-open && root.filters-embedded: FiltersPanel {
+            embedded: true; height: 635px;
+        }
+        if root.settings-section == 6 && root.login-open && root.login-embedded: LoginPanel {
+            embedded: true; height: 280px;
+            composing: root.login-composing;
+            account-label: root.login-account-label;
+            password-label: root.login-password-label;
+            remember-label: root.login-remember-label;
+            forget-label: root.login-forget-label;
+            submit-label: root.login-label;
+            message: root.login-message;
+            account <=> root.login-account;
+            password <=> root.login-password;
+            remember <=> root.login-remember;
+            busy: root.login-busy;
+            saved: root.login-saved;
+            submit(account, password, remember) => { root.login-submit(account, password, remember); }
+            forget => { root.login-forget(); }
+            limit-text(text, maximum) => { return root.login-limit-text(text, maximum); }
+        }
+    }
+    SitesPanel { visible: root.sites-open && !root.sites-embedded; width: parent.width; height: parent.height; }
+    FiltersPanel { visible: root.filters-open && !root.filters-embedded; width: parent.width; height: parent.height; }
+    bookmarks-panel := BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }
+    DestinationPanel { visible: root.destination-open; width: parent.width; height: parent.height; }
+}

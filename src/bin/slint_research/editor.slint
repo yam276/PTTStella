@@ -1,0 +1,226 @@
+import { PanelButton, PanelCombo, PanelField, PanelScrollView, PanelTheme } from "panel.slint";
+import { UiLabels } from "labels.slint";
+import { ColorPalette } from "color-palette.slint";
+import { SelectionRect } from "selection.slint";
+import { CompositionInput } from "composition-input.slint";
+export struct DraftItem { id:string, title:string, conflict:bool }
+export global EditorState {
+    in-out property <bool> available;
+    in-out property <bool> station-editor;
+    in-out property <bool> open;
+    in-out property <bool> composing;
+    in-out property <bool> body-focused;
+    in-out property <bool> title-focused;
+    in-out property <bool> selected;
+    in-out property <bool> busy;
+    in-out property <bool> source-busy;
+    in-out property <bool> source-cancelling;
+    in-out property <bool> palette-open;
+    in-out property <length> palette-x;
+    in-out property <length> palette-y;
+    in-out property <int> palette-selected:15;
+    in-out property <[string]> palette-labels;
+    in-out property <string> foreground-label;
+    in-out property <string> background-label;
+    in-out property <[string]> selection-labels;
+    in-out property <int> selection-mode;
+    in-out property <bool> can-create;
+    in-out property <bool> can-undo;
+    in-out property <bool> can-redo;
+    in-out property <bool> transfer-confirm;
+    in-out property <bool> can-transfer;
+    in-out property <string> title;
+    in-out property <string> status;
+    in-out property <string> position;
+    in-out property <string> scope;
+    in-out property <int> mode;
+    in-out property <int> foreground:15;
+    in-out property <int> background;
+    in-out property <[DraftItem]> drafts;
+    in-out property <[SelectionRect]> spans;
+    in-out property <image> pixels;
+    in-out property <float> caret-column;
+    in-out property <float> caret-row;
+    in-out property <bool> caret-visible;
+    in-out property <length> view-width;
+    in-out property <length> view-height;
+    callback action(int);
+    callback choose(string);
+    callback delete(string);
+    callback insert(string) -> bool;
+    callback title-edit(string);
+    callback mode-edit(int);
+    callback palette-request(float,float);
+    callback palette-dismiss(bool);
+    callback palette-choose(int);
+    callback selection-edit(int);
+    callback pointer(int,float,float,bool,bool);
+    callback scroll(int,int);
+    callback layout;
+    callback focus-changed;
+}
+export component NativeEditor inherits Rectangle {
+    background: PanelTheme.surface;
+    out property <length> grid-left:content.x + area.x + grid.x;
+    out property <length> grid-top:content.y + area.y + grid.y;
+    out property <length> grid-width:grid.width;
+    out property <length> grid-height:grid.height;
+    property <bool> title-focused:title-field.has-focus;
+    property <bool> body-focused:body-field.has-focus;
+    changed title-focused => { EditorState.title-focused=self.title-focused; EditorState.focus-changed(); }
+    changed body-focused => { EditorState.body-focused=self.body-focused; EditorState.focus-changed(); }
+    public function title-edit-key(code:int) {
+        if code==0 {title-field.select-all();}
+        else if code==1 {title-field.copy();}
+        else if code==2 {title-field.cut();}
+        else if code==3 {title-field.paste();}
+    }
+    public function focus-dialog() {dialog-keys.focus();}
+    public function focus-palette() {palette.focus-palette();}
+    public function clear-input() { body-field.text=""; }
+    public function focus-body() { body-field.focus-input(); }
+    dialog-keys := FocusScope {
+      width:parent.width;height:parent.height;
+      key-pressed(event)=>{if event.text==Key.Escape && !EditorState.composing {EditorState.action(EditorState.source-busy ? 9 : 3);return accept;}return reject;}
+    TouchArea { }
+    VerticalLayout {
+        padding:12px;spacing:8px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text:UiLabels.local-drafts + " · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
+            PanelButton {text:UiLabels.editor-save;enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
+            PanelButton {text:UiLabels.editor-transfer;primary:true;enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
+            if EditorState.source-busy: PanelButton {text:EditorState.source-cancelling ? UiLabels.editor-stop : UiLabels.editor-cancel-job;enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
+            PanelButton {text:UiLabels.editor-close;enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
+        }
+        Rectangle {
+            visible:!EditorState.selected;min-height:0px;max-height:EditorState.selected ? 0px : 100000px;vertical-stretch:1;
+            VerticalLayout {
+            PanelButton { text:UiLabels.editor-new;enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
+            PanelScrollView {
+                VerticalLayout {
+                    for item in EditorState.drafts: HorizontalLayout {min-height:38px;max-height:38px;spacing:8px;
+                        PanelButton { text:item.title + (item.conflict ? " · " + UiLabels.editor-conflict : "");horizontal-stretch:1;flat:true;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
+                        PanelButton { text:UiLabels.editor-delete;enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
+                    }
+                }
+            }
+        }
+        }
+        content := Rectangle {
+          visible:EditorState.selected;min-height:0px;max-height:EditorState.selected ? 100000px : 0px;vertical-stretch:1;
+          VerticalLayout { spacing:8px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text {horizontal-stretch:0;text:UiLabels.editor-title;color:#cad5e5;vertical-alignment:center;}
+            title-field := PanelField {
+                horizontal-stretch: 1;
+                text <=> EditorState.title;
+                enabled: !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                accessible-label: UiLabels.editor-title;
+                edited(text) => { EditorState.title-edit(text); }
+            }
+            PanelCombo {
+                preferred-width: 140px;
+                max-width: 150px;
+                model: UiLabels.editor-modes;
+                displayed-index: EditorState.mode;
+                enabled: !EditorState.composing && !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                selected => {
+                    EditorState.mode-edit(self.current-index);
+                    root.focus-body();
+                }
+            }
+            PanelButton {text:UiLabels.editor-undo;enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
+            PanelButton {text:UiLabels.editor-redo;enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            PanelCombo {accessible-label:UiLabels.editor-selection;preferred-width:180px;max-width:220px;model:EditorState.selection-labels;displayed-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected => { EditorState.selection-edit(self.current-index); root.focus-body(); } }
+            PanelButton {text:UiLabels.editor-palette;enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
+            Text {text:UiLabels.editor-color-hint;color:#9ab0ca;vertical-alignment:center;horizontal-stretch:1;}
+        }
+        area := Rectangle {
+            vertical-stretch:1;clip:true;background:black;
+            property <length> unit:min(self.width/79,self.height/46);
+            grid := Rectangle {
+                x:(parent.width - self.width)/2;y:(parent.height - self.height)/2;
+                width:area.unit*79;height:area.unit*46;clip:true;
+                changed width=>{EditorState.view-width=self.width;EditorState.layout();}
+                changed height=>{EditorState.view-height=self.height;EditorState.layout();}
+                Image {width:parent.width;height:parent.height;source:EditorState.pixels;image-fit:fill;}
+                for span in EditorState.spans: Rectangle {x:span.x;y:span.y;width:span.width;height:span.height;background:#4387d666;}
+                body-field := CompositionInput {
+                    anchor-x: clamp(EditorState.caret-column, 0, 78) * area.unit;
+                    anchor-y: clamp(EditorState.caret-row, 0, 22) * 2 * area.unit;
+                    area-width: grid.width;
+                    area-height: grid.height;
+                    row-height: 2 * area.unit;
+                    preedit-background: black;
+                    text-cursor-width: EditorState.caret-visible ? 1px : 0px;
+                    enabled: !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                    label: UiLabels.editor-body;
+                    // Document owns the text, including rejected commit handling.
+                    edited => {
+                        EditorState.insert(self.text);
+                        self.text = "";
+                    }
+                }
+                TouchArea {
+                    enabled:!EditorState.busy && !EditorState.composing && !EditorState.transfer-confirm && !EditorState.palette-open;
+                    mouse-cursor:text;
+                    property <bool> left-held;
+                    property <bool> right-held;
+                    property <length> press-x;
+                    property <length> press-y;
+                    property <bool> drag-distance:Math.abs(self.mouse-x - self.press-x)>=3px || Math.abs(self.mouse-y - self.press-y)>=3px;
+                    pointer-event(event)=>{
+                        if event.kind==PointerEventKind.cancel {
+                            self.left-held=false;self.right-held=false;EditorState.pointer(3,self.mouse-x/1px,self.mouse-y/1px,false,false);
+                        } else if event.kind==PointerEventKind.down {
+                            self.press-x=self.mouse-x;self.press-y=self.mouse-y;
+                            if event.button==PointerEventButton.left {self.left-held=true;EditorState.pointer(0,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);root.focus-body();}
+                            else if event.button==PointerEventButton.right {self.right-held=true;}
+                        } else if event.kind==PointerEventKind.move {
+                            if self.right-held && self.drag-distance {self.right-held=false;}
+                            if self.left-held && self.drag-distance {EditorState.pointer(1,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);}
+                        } else if event.kind==PointerEventKind.up {
+                            if event.button==PointerEventButton.left && self.left-held {
+                                self.left-held=false;EditorState.pointer(self.drag-distance ? 2 : 6,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);
+                            } else if event.button==PointerEventButton.right && self.right-held {
+                                self.right-held=false;EditorState.palette-request((root.grid-left+self.mouse-x)/1px,(root.grid-top+self.mouse-y)/1px);
+                            }
+                        }
+                    }
+                    double-clicked=>{EditorState.pointer(4,self.mouse-x/1px,self.mouse-y/1px,false,false);}
+                    scroll-event(event)=>{
+                        if event.delta-y!=0px {EditorState.scroll(event.modifiers.shift ? 0 : (event.delta-y>0px ? -3 : 3), event.modifiers.shift ? (event.delta-y>0px ? -3 : 3) : 0);}
+                        else if event.delta-x!=0px {EditorState.scroll(0,event.delta-x>0px ? -3 : 3);}
+                        return accept;
+                    }
+                }
+            }
+        }
+          }
+        }
+        if EditorState.transfer-confirm: HorizontalLayout {
+            Text {text:UiLabels.editor-confirm;color:#ffcf77;wrap:word-wrap;horizontal-stretch:1;}
+            PanelButton {text:UiLabels.editor-confirm-transfer;primary:true;enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
+            PanelButton {text:UiLabels.editor-cancel;enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Text {text:EditorState.status;color:#c7d4e7;horizontal-stretch:1;overflow:elide;}
+            Text {text:EditorState.position;color:#9ab0ca;}
+        }
+    }
+    palette := ColorPalette {
+        visible:EditorState.palette-open;width:parent.width;height:parent.height;
+        anchor-x:EditorState.palette-x;anchor-y:EditorState.palette-y;
+        labels:EditorState.palette-labels;foreground-label:EditorState.foreground-label;background-label:EditorState.background-label;
+        foreground-index:EditorState.foreground;background-index:EditorState.background;selected <=> EditorState.palette-selected;
+        choose(index)=>{EditorState.palette-choose(index);}
+        dismiss(restore)=>{EditorState.palette-dismiss(restore);}
+    }
+    }
+}

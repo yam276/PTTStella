@@ -45,6 +45,36 @@ pub struct Status {
     pub prefix: String,
     pub suspended_reason: Option<UnknownReason>,
 }
+impl Status {
+    pub fn label(&self) -> String {
+        match self.mode {
+            "normal" => format!("VIM NORMAL {}", self.prefix).trim_end().to_owned(),
+            "once" => crate::msg!("vim-once"),
+            "suspended" => self
+                .suspended_reason
+                .map(suspension_message)
+                .unwrap_or_default(),
+            _ => "PTT INPUT".to_owned(),
+        }
+    }
+}
+
+fn suspension_message(reason: UnknownReason) -> String {
+    match reason {
+        UnknownReason::DifferentSite => crate::msg!("site-raw-input"),
+        UnknownReason::UnsupportedGrid => crate::msg!("vim-grid"),
+        UnknownReason::Incomplete => crate::msg!("vim-incomplete"),
+        UnknownReason::Unmapped => crate::msg!("vim-unmapped"),
+        UnknownReason::Unrecognized => crate::msg!("vim-unrecognized"),
+        UnknownReason::BoardHeader => crate::msg!("vim-board-header"),
+        UnknownReason::UnsupportedLayout => crate::msg!("vim-layout"),
+        UnknownReason::BoardRows => crate::msg!("vim-board-rows"),
+        UnknownReason::InvalidCursor => {
+            crate::msg!("vim-cursor")
+        }
+    }
+}
+
 impl Keyboard {
     /// Local reading commands never consume an explicit raw-input handoff or prefix.
     pub fn inline_images_key(&self, key: &Key, context: &Context) -> bool {
@@ -121,6 +151,13 @@ impl Keyboard {
         self.text = None;
         self.composition = false;
     }
+    /// Retire commands and page-local scroll history across connection generations.
+    /// The user's explicit choice of native input or Vim remains in effect.
+    pub fn new_session(&mut self) {
+        self.reset();
+        self.scroll = None;
+        self.profile = "";
+    }
     pub fn context(&mut self, context: &Context) {
         if self.profile != context.kind() {
             // A continue key belongs to the pause prompt until keyup, even if
@@ -154,14 +191,12 @@ impl Keyboard {
         self.text = Some(false);
     }
     pub fn accept_text(&mut self, composition: bool) -> bool {
-        if self.profile == "continue_prompt" {
-            self.text = Some(false);
-            return false;
-        }
         let allowed = if composition {
             self.composition
         } else {
-            self.text.take().unwrap_or(!self.enabled || self.input)
+            self.text
+                .take()
+                .unwrap_or(self.profile != "continue_prompt" && (!self.enabled || self.input))
         };
         if allowed && self.once {
             self.once = false;
@@ -178,7 +213,8 @@ impl Keyboard {
         // code in browsing modes and explicit Control shortcuts. A CJK input
         // source can report a non-Latin glyph for Ctrl+X even outside Vim.
         // Ordinary text, Alt-produced text and composition keep their owner.
-        let normalized = if self.enabled && !self.input && !self.once
+        let pause = matches!(context, Context::ContinuePrompt);
+        let normalized = if self.enabled && !self.input && !self.once && !pause
             || key.ctrl && !key.alt && !self.composition
         {
             normal_key(key)
@@ -213,14 +249,14 @@ impl Keyboard {
         {
             return Effect::None;
         }
-        // A confirmed pause has one command in every keyboard mode. Never
-        // forward its dismissing key as text or reinterpret it on the next page.
-        if matches!(context, Context::ContinuePrompt) {
-            if key.repeat
-                || self.composition
-                || key.key.is_empty()
-                || matches!(key.key.as_str(), "Dead" | "Process" | "Unidentified")
-            {
+        // The station interprets the actual key. Hold it until keyup so an
+        // OS repeat cannot also act on the screen that follows the prompt.
+        if pause {
+            if key.repeat || self.composition {
+                return Effect::None;
+            }
+            let bytes = native_key(key);
+            if !printable && bytes.is_none() {
                 return Effect::None;
             }
             self.count = 0;
@@ -228,7 +264,8 @@ impl Keyboard {
             self.g = false;
             self.once = false;
             self.continue_hold = Some(key.code.clone());
-            return Effect::Browse(Intent::Continue);
+            self.text = Some(printable);
+            return bytes.map_or(Effect::None, Effect::Native);
         }
         if !self.enabled || self.input || self.once {
             if self.enabled
@@ -275,19 +312,7 @@ impl Keyboard {
         }
         if let Context::Unknown { reason } = context {
             self.reset();
-            return Effect::Notice(match reason {
-                UnknownReason::DifferentSite => crate::msg!("site-raw-input"),
-                UnknownReason::UnsupportedGrid => crate::msg!("vim-grid"),
-                UnknownReason::Incomplete => crate::msg!("vim-incomplete"),
-                UnknownReason::Unmapped => crate::msg!("vim-unmapped"),
-                UnknownReason::Unrecognized => crate::msg!("vim-unrecognized"),
-                UnknownReason::BoardHeader => crate::msg!("vim-board-header"),
-                UnknownReason::UnsupportedLayout => crate::msg!("vim-layout"),
-                UnknownReason::BoardRows => crate::msg!("vim-board-rows"),
-                UnknownReason::InvalidCursor => {
-                    crate::msg!("vim-cursor")
-                }
-            });
+            return Effect::Notice(suspension_message(*reason));
         }
         if !key.ctrl && !key.alt && key.key.len() == 1 && key.key.as_bytes()[0].is_ascii_digit() {
             if self.invalid_count {
@@ -320,14 +345,14 @@ impl Keyboard {
         self.count = 0;
         if self.g {
             self.g = false;
-            return if key.key == "g" && !key.ctrl && !counted {
+            return if key.key == "g" && !key.ctrl && !key.alt && !counted {
                 Effect::Browse(Intent::First)
             } else {
-                Effect::Notice(crate::msg!("vim-g-unsupported"))
+                Effect::None
             };
         }
         if key.alt {
-            return Effect::Notice(crate::msg!("vim-chord-unsupported"));
+            return Effect::None;
         }
         let action = if key.ctrl {
             match key.key.to_ascii_lowercase().as_str() {
@@ -347,7 +372,7 @@ impl Keyboard {
                 },
                 "f" if !counted => Intent::NextPage,
                 "b" if !counted => Intent::PreviousPage,
-                _ => return Effect::Notice(crate::msg!("vim-chord-count")),
+                _ => return Effect::None,
             }
         } else {
             match key.key.as_str() {
@@ -363,9 +388,7 @@ impl Keyboard {
                 "Home" if !counted => Intent::First,
                 "PageDown" if !counted => Intent::NextPage,
                 "PageUp" if !counted => Intent::PreviousPage,
-                _ => {
-                    return Effect::Notice(crate::msg!("vim-key-unsupported"));
-                }
+                _ => return Effect::None,
             }
         };
         Effect::Browse(action)
@@ -423,6 +446,49 @@ fn native_key(key: &Key) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod inline_tests {
     use super::*;
+    #[test]
+    fn new_session_retires_scroll_prefix_and_holds_but_preserves_explicit_mode() {
+        let context = Context::ArticleReading {
+            first_line: 1,
+            last_line: 23,
+            percent: 50,
+        };
+        let key = |text: &str, ctrl| Key {
+            key: text.into(),
+            code: format!("Key{}", text.to_uppercase()),
+            ctrl,
+            alt: false,
+            shift: false,
+            repeat: false,
+        };
+        let mut keyboard = Keyboard::default();
+        keyboard.toggle();
+        assert_eq!(keyboard.key(&key("3", false), &context), Effect::None);
+        assert_eq!(
+            keyboard.key(&key("d", true), &context),
+            Effect::Browse(Intent::Lines {
+                down: true,
+                count: 3
+            })
+        );
+        assert_eq!(keyboard.key(&key("g", false), &context), Effect::None);
+        assert!(keyboard.status(&context).pending);
+        keyboard.new_session();
+        assert_eq!(keyboard.status(&context).mode, "normal");
+        assert!(!keyboard.status(&context).pending);
+        assert_eq!(
+            keyboard.key(&key("d", true), &context),
+            Effect::Browse(Intent::Lines {
+                down: true,
+                count: 11
+            })
+        );
+        keyboard.use_native_input();
+        keyboard.new_session();
+        assert!(keyboard.status(&context).enabled);
+        assert_eq!(keyboard.status(&context).mode, "input");
+    }
+
     #[test]
     fn local_images_respect_raw_handoff_prefixes_and_prompt_keys() {
         let mut keyboard = Keyboard::default();

@@ -46,11 +46,12 @@ def run(main, output):
         d.click('#settings-results button')
         d.wait('document.activeElement.id === "tools-opacity"', 'search result did not focus the setting')
     s.page('appearance')
-    s.edit('#font-size', '18')
-    s.edit('#font-baseline', '19')
+    metrics = {'font-size': '18.5', 'font-baseline': '19.25', 'font-width': '102.5'}
+    for field, value in metrics.items():
+        s.edit('#' + field, value)
     s.edit('#font-ascii', 'Courier New')
     s.saved()
-    main.wait('document.getElementById("surface").dataset.fontSize === "18" && document.getElementById("surface").dataset.baseline === "19"',
+    main.wait('document.getElementById("surface").dataset.fontSize === "18.5" && document.getElementById("surface").dataset.baseline === "19.25"',
               'autosaved font metrics did not reach the main renderer')
     pixels = main.evaluate('document.getElementById("screen").toDataURL("image/png")')
     if pixels == initial:
@@ -58,19 +59,21 @@ def run(main, output):
     (output/'settings-after.png').write_bytes(base64.b64decode(pixels.split(',', 1)[1], validate=True))
     saved_bytes = path.read_bytes()
     saved = json.loads(saved_bytes)
-    if (saved['display']['font_size'] != 18 or saved['display']['baseline'] != 19
+    if (saved['display']['font_size'] != 18.5 or saved['display']['baseline'] != 19.25
+            or saved['display']['font_width'] != 102.5
             or saved['display']['fonts']['ascii_font'] != 'Courier New'):
         raise ValueError('autosave did not persist the actual configuration')
     s.close()
     s = Settings(main)
     d = s.target
     s.page('appearance')
-    if d.evaluate('document.getElementById("font-size").value') != '18':
+    if any(d.evaluate(f'document.getElementById("{field}").value') != value
+           for field, value in metrics.items()):
         raise ValueError('reopening settings lost the saved value')
     s.edit('#font-size', '100')
     d.wait('document.getElementById("font-dialog").dataset.saveState === "invalid"',
            'invalid partial edit was not retained for correction')
-    if path.read_bytes() != saved_bytes or main.evaluate('document.getElementById("surface").dataset.fontSize') != '18':
+    if path.read_bytes() != saved_bytes or main.evaluate('document.getElementById("surface").dataset.fontSize') != '18.5':
         raise ValueError('invalid edit changed the stored or effective configuration')
     d.click('#font-defaults')
     s.saved()
@@ -84,5 +87,5 @@ def run(main, output):
     profile_report = desktop_profiles.run(main, output, s)
     return ({'status': 'passed', 'same_webview_modal': True, 'bilingual_search': True,
              'autosave_actual_file_and_pixels': True, 'invalid_edit_preserves_effective_values': True,
-             'reopen_and_category_defaults': True,
+             'reopen_and_category_defaults': True, 'fractional_metrics_persisted_and_reopened': True,
              'scope': 'trusted owned Windows WebView2 controls; native picker and other OS excluded'}, profile_report)

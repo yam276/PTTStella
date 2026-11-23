@@ -51,6 +51,20 @@ class DependencyTests(unittest.TestCase):
         legacy = self.inspect(self.image(attributes=0, image_base=0x400000))
         self.assertEqual(legacy, result)
 
+    def test_console_runtime_inspection_does_not_relax_application_gate(self):
+        data = self.image()
+        struct.pack_into('<H', data, 0xdc, 3)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'runtime.dll'
+            path.write_bytes(data)
+            with self.assertRaisesRegex(ValueError, 'Windows GUI subsystem'):
+                bundle.inspect_pe(path)
+            self.assertEqual(bundle.inspect_pe(path, require_gui=False)['subsystem'], 'Windows CUI')
+            struct.pack_into('<H', data, 0xdc, 1)
+            path.write_bytes(data)
+            with self.assertRaisesRegex(ValueError, 'GUI or CUI'):
+                bundle.inspect_pe(path, require_gui=False)
+
     def test_delayed_private_dll_is_still_rejected_by_both_application_policies(self):
         from windows_portable import verify_dependencies
         result = self.inspect(self.image(delayed='private-development.dll'))

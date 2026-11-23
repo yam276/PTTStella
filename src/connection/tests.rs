@@ -764,7 +764,7 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
         ("continue_prompt", ["l"].as_slice()),
         ("continue_prompt", ["Enter"].as_slice()),
         ("continue_prompt", [" "].as_slice()),
-        ("article_list", ["j", "k", "h"].as_slice()),
+        ("article_list", ["Q", "3", "x", "j", "k", "h"].as_slice()),
         ("command_help", ["j", "k", "g", "g", "G", "h"].as_slice()),
         ("empty_list", ["h"].as_slice()),
     ]);
@@ -796,12 +796,27 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
                 shift: false,
                 repeat: false,
             };
-            let effect = keyboard.key(&key, &context);
+            let revision = view.frame.revision;
+            let sent = match keyboard.key(&key, &context) {
+                Effect::Browse(intent) => {
+                    connection.browse_key(view.stamp(), intent).await.unwrap();
+                    true
+                }
+                Effect::Native(bytes) => {
+                    connection.input(view.generation, bytes).unwrap();
+                    true
+                }
+                Effect::None if keyboard.accept_text(false) => {
+                    connection
+                        .input(view.generation, value.as_bytes().to_vec())
+                        .unwrap();
+                    true
+                }
+                Effect::None => false,
+                effect => panic!("unexpected {effect:?}"),
+            };
             keyboard.release(&key.code);
-            assert!(!keyboard.accept_text(false));
-            if let Effect::Browse(intent) = effect {
-                let revision = view.frame.revision;
-                connection.browse_key(view.stamp(), intent).await.unwrap();
+            if sent {
                 operations += 1;
                 if !matches!(operations, 31 | 32) {
                     view = wait(&connection, |v| {
@@ -809,8 +824,6 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
                     })
                     .await;
                 }
-            } else {
-                assert_eq!(effect, Effect::None);
             }
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
@@ -819,6 +832,87 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
     // Peer expects 46 translated operations including help and empty-list browsing, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn second_uppercase_q_reaches_the_article_price_prompt() {
+    use crate::navigation::Context;
+    use crate::vim::{Effect, Key, Keyboard};
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    let screens: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    let screen =
+        |name: &str| crate::encoding::encode(screens["screens"][name].as_str().unwrap()).unwrap();
+    ws.send(Message::Binary(screen("articles").into()))
+        .await
+        .unwrap();
+    let list = wait(&connection, |view| {
+        matches!(view.context(), Context::ArticleList { .. })
+    })
+    .await;
+    connection.input(list.generation, b"Q".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+    ws.send(Message::Binary(screen("information").into()))
+        .await
+        .unwrap();
+    let info = wait(&connection, |view| {
+        view.context() == Context::ContinuePrompt
+    })
+    .await;
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    let mut q = Key {
+        key: "Q".into(),
+        code: "KeyQ".into(),
+        ctrl: false,
+        alt: false,
+        shift: true,
+        repeat: false,
+    };
+    assert_eq!(keyboard.key(&q, &info.context()), Effect::None);
+    assert!(keyboard.accept_text(false));
+    connection
+        .input(info.generation, crate::encoding::encode(&q.key).unwrap())
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+
+    ws.send(Message::Binary(navigation_page("board_entry").into()))
+        .await
+        .unwrap();
+    let notice = wait(&connection, |view| {
+        view.frame.revision > info.frame.revision && view.context() == Context::ContinuePrompt
+    })
+    .await;
+    q.repeat = true;
+    assert_eq!(keyboard.key(&q, &notice.context()), Effect::None);
+    assert!(!keyboard.accept_text(false));
+    keyboard.release(&q.code);
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+
+    let enter = Key {
+        key: "Enter".into(),
+        code: "Enter".into(),
+        shift: false,
+        repeat: false,
+        ..q
+    };
+    let Effect::Native(bytes) = keyboard.key(&enter, &notice.context()) else {
+        panic!("expected the original Enter bytes");
+    };
+    connection.input(notice.generation, bytes).unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\r"
+    );
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
 }
 
 #[tokio::test]
@@ -1996,6 +2090,7 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
     connection
         .enqueue(Command::Navigate {
             source: navigation::Source::Pointer,
+            cancellation: None,
             stamp: returned.stamp(),
             intent: Intent::Open { row: 4 },
             reply,
@@ -2006,6 +2101,146 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
         .await
         .unwrap()
         .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn explicit_navigation_cancellation_reaches_owner_before_ui_future_is_polled() {
+    let (listener, connection) = local().await;
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page("list").into()))
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        matches!(v.context(), navigation::Context::ArticleList { .. })
+    })
+    .await;
+    let (reply, cancel) = connection
+        .request_cancellable_navigate(
+            view.stamp(),
+            Intent::Open { row: 4 },
+            navigation::Source::Pointer,
+        )
+        .unwrap();
+    // The single-thread runtime cannot poll the worker between enqueue and cancel.
+    // Keep the reply alive to prove receiver-drop is not what rejects this command.
+    cancel.cancel();
+    cancel.cancel();
+    assert_eq!(
+        reply.wait().await,
+        Err(navigation::Error::Stale.to_string())
+    );
+    assert_eq!(connection.updates.borrow().input_epoch, view.input_epoch);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    timeout(Duration::from_secs(4), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn stamped_paste_rejects_queued_old_preview_and_abandoned_delivery() {
+    let (listener, connection) = idle_local().await;
+    connection.keep_alive(false).unwrap();
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(
+        b"\x1b[2J\x1b[HPASTE PREVIEW".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let first = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    // Both intents queue before the single-thread worker can run. The first
+    // changes input_epoch without changing generation, invalidating the preview.
+    connection.input(first.generation, b"k".to_vec()).unwrap();
+    let stale = connection
+        .request_paste(first.stamp(), b"STALE".to_vec())
+        .unwrap();
+    assert_eq!(stale.wait().await, Err(crate::msg!("paste-stale")));
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"k");
+    ws.send(Message::Binary(
+        b"\x1b[HREADY FOR NEW PASTE".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let ready = wait(&connection, |v| {
+        v.input_epoch > first.input_epoch && !v.input_pending && !v.output_pending
+    })
+    .await;
+    connection
+        .request_paste(ready.stamp(), vec![0xa4, 0xa4])
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        &[0xa4, 0xa4]
+    );
+    ws.send(Message::Binary(
+        b"\x1b[HREADY FOR ABANDONED PASTE".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let current = wait(&connection, |v| {
+        v.input_epoch > ready.input_epoch && !v.input_pending && !v.output_pending
+    })
+    .await
+    .stamp();
+    drop(
+        connection
+            .request_paste(current, b"ABANDONED".to_vec())
+            .unwrap(),
+    );
+    assert!(
+        timeout(Duration::from_millis(100), ws.next())
+            .await
+            .is_err()
+    );
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn coalesced_pause_resume_restarts_keepalive_idle_window() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    wait(&connection, |v| v.keep_alive_ready).await;
+    // No worker poll during this bounded stall or the two watch writes. The
+    // original idle deadline has elapsed, but the latest value is ready again.
+    std::thread::sleep(Duration::from_millis(180));
+    connection.keep_alive_gate(first.stamp(), false);
+    connection.keep_alive_gate(first.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(70), ws.next()).await.is_err(),
+        "a collapsed pause must prevent an immediately overdue refresh"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    finish_board_peer(&connection, ws).await;
 }
 
 #[tokio::test]
@@ -2367,6 +2602,90 @@ async fn telnet_gbk_switch_closes_websocket_before_new_input_and_disables_ptt_co
         CloseOutcome::TransportClosed
     );
     assert_eq!(tcp.read(&mut [0; 1]).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn switching_encoding_at_the_same_endpoint_reconnects_and_discards_old_state() {
+    use crate::{encoding::TextEncoding, sites::Target};
+
+    let (listener, connection) = local().await;
+    let endpoint = format!("ws://{}/bbs", listener.local_addr().unwrap());
+    let original = Target::new(endpoint.clone(), TextEncoding::Uao).unwrap();
+    let target = Target::new(endpoint, TextEncoding::Gbk).unwrap();
+    connection.connect_to(original.clone()).unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut old = tokio_tungstenite::accept_async(stream).await.unwrap();
+    old.send(Message::Binary(
+        b"\x1b[31m\xa4\xa4\x1b[2;1Hold session\x1b[1;3H\xa4"
+            .to_vec()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let initial = wait(&connection, |view| {
+        view.phase == Phase::Connected
+            && view.frame.glyphs.first().is_some_and(|g| g.text == "中")
+            && view
+                .frame
+                .glyphs
+                .iter()
+                .any(|g| g.row == 1 && g.text == "o")
+    })
+    .await;
+    assert_eq!(initial.site, original);
+    assert_eq!(initial.frame.glyphs[0].left.fg, 1);
+    connection.connect_to(target.clone()).unwrap();
+    assert!(matches!(
+        timeout(Duration::from_secs(4), old.next()).await.unwrap(),
+        Some(Ok(Message::Close(_)))
+    ));
+    assert!(
+        timeout(Duration::from_millis(80), listener.accept())
+            .await
+            .is_err()
+    );
+    old.flush().await.unwrap();
+
+    let (stream, _) = timeout(Duration::from_secs(4), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut new = tokio_tungstenite::accept_async(stream).await.unwrap();
+    new.send(Message::Binary(b"\xd6\xd0\xce\xc4".to_vec().into()))
+        .await
+        .unwrap();
+    let current = wait(&connection, |view| {
+        view.site == target
+            && view.phase == Phase::Connected
+            && !view.output_pending
+            && view.frame.glyphs.get(1).is_some_and(|g| g.text == "文")
+    })
+    .await;
+    assert!(current.generation > initial.generation);
+    assert_eq!(current.frame.glyphs[0].text, "中");
+    assert_ne!(current.frame.glyphs[0].left.fg, 1);
+    assert!(
+        current
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 1)
+            .all(|g| g.text == " ")
+    );
+    connection
+        .input(initial.generation, b"STALE".to_vec())
+        .unwrap();
+    connection
+        .input(
+            current.generation,
+            crate::input::encode_with("中文", current.site.encoding).unwrap(),
+        )
+        .unwrap();
+    assert!(matches!(
+        timeout(Duration::from_secs(4), new.next()).await.unwrap(),
+        Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\xd6\xd0\xce\xc4"
+    ));
+    finish_board_peer(&connection, new).await;
 }
 
 #[tokio::test]
@@ -3352,4 +3671,58 @@ async fn draft_partial_clear_waits_without_writing_body_and_manual_input_still_c
         CloseOutcome::Acknowledged
     );
     peer.await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn mouse_revoke_ack_publishes_policy_before_reply_and_discards_queued_sample() {
+    use crate::mouse::{
+        self,
+        input::{Lease, Sample, SampleReport},
+    };
+    let connection =
+        Connection::start_ui_probe(b"\x1b[2J\x1b[HOWNED MOUSE FENCE\x1b[?1003;1006h".to_vec())
+            .unwrap();
+    assert_eq!(
+        connection.updates.borrow().mouse.route,
+        mouse::input::Route::Local
+    );
+    connection.connect().unwrap();
+    let view = wait(&connection, |view| {
+        view.mouse.route == mouse::input::Route::Station
+    })
+    .await;
+    assert_eq!(view.generation, 1);
+    assert_eq!(view.phase, Phase::Connected);
+    let lease = Lease {
+        stamp: view.stamp(),
+        mode_epoch: view.mouse.modes.epoch(),
+        policy_epoch: view.mouse.policy_epoch,
+        transaction: 1,
+    };
+    connection
+        .mouse_sample(Sample {
+            lease,
+            sequence: 1,
+            report: SampleReport::Motion(mouse::MotionReport {
+                col: 4,
+                row: 4,
+                button: None,
+                modifiers: mouse::Modifiers::default(),
+            }),
+        })
+        .unwrap();
+    connection
+        .request_mouse_revoke(view.generation)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let after = connection.updates.borrow().clone();
+    assert!(after.mouse.policy_epoch > view.mouse.policy_epoch);
+    assert!(after.mouse.active.is_none());
+    assert_eq!(after.input_epoch, view.input_epoch);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
 }

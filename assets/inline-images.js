@@ -347,8 +347,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
             // Rust identifies the numeric status cells. Only the visible
             // page, visible row range and percentage are local decorations. Colours come from
-            // the visible source page; source PNGs stay intact.
-            let footerGlyphs=rowGlyphs.get(row)??[],progress=null;
+            // a source page matching the local end state; source PNGs stay intact.
+            let footerGlyphs=rowGlyphs.get(row)??[],progress=null,percent=null;
             const cells=article.percent_cells;
             if(cells&&viewport){
                 // Minimum-height blank padding is not unread article content.
@@ -356,17 +356,22 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 const earlier=(article.first_line-1)*height;
                 const total=Math.max(1,earlier+mapping.y(bodyRows));
                 const seen=earlier+Math.max(0,(viewport.scrollTop-surface.offsetTop+viewport.clientHeight)*ratio-height);
-                const percent=article.end?(seen>=total-1?100:Math.min(99,Math.floor(seen/total*100))):null;
+                percent=article.end?(seen>=total-1?100:Math.min(99,Math.floor(seen/total*100))):null;
                 progress=(percent===null?"--":String(percent)).padStart(cells.end-cells.start," ");
                 footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:progress[g.col-cells.start]}:g);
             }
             if(article.pages?.length&&viewport){
                 const line=article.first_line+Math.min(article.last_line-article.first_line,mapping.rowAt(top,true));
-                const page=article.pages.reduce((best,page)=>Math.abs(page.line-line)<Math.abs(best.line-line)?page:best);
-                if(page.styles?.length===packet.frame.cols){
-                    footerGlyphs=footerGlyphs.map(g=>({...g,left:page.styles[g.col],right:page.styles[g.col+g.width-1]}));
+                const nearest=pages=>pages.reduce((best,page)=>Math.abs(page.line-line)<Math.abs(best.line-line)?page:best);
+                // The station colours its footer by end state, while the local viewport can be taller or
+                // shorter than one station page. At 100% show its end page; before that, never borrow its colours.
+                const end=article.pages.find(page=>page.end),others=article.pages.filter(page=>!page.end);
+                const page=percent===100&&end?end:nearest(article.pages);
+                const styled=percent!==null&&percent<100&&page.end&&others.length?nearest(others):page;
+                if(styled.styles?.length===packet.frame.cols){
+                    footerGlyphs=footerGlyphs.map(g=>({...g,left:styled.styles[g.col],right:styled.styles[g.col+g.width-1]}));
                 }
-                progress=JSON.stringify([progress,page.line,page.number]);
+                progress=JSON.stringify([progress,page.line,page.number,styled.line]);
                 const cells=article.page_cells,value=cells?String(page.number).padStart(cells.end-cells.start," "):null;
                 if(cells&&value.length===cells.end-cells.start){
                     footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);

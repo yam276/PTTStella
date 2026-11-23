@@ -37,7 +37,7 @@ async fn bookmark_files_keep_request_identity_commit_only_on_delivery_and_revoke
     };
     assert_eq!(request, 18);
     assert!(state.snapshot().entries.is_empty());
-    state.complete(Ok(saved));
+    state.complete(Ok(saved)).unwrap();
     assert_eq!(state.snapshot().entries.len(), 1);
     let old = std::fs::read(&path).unwrap();
     std::fs::create_dir(path.with_extension("json.bak")).unwrap();
@@ -53,7 +53,7 @@ async fn bookmark_files_keep_request_identity_commit_only_on_delivery_and_revoke
         panic!("backup failure was swallowed")
     };
     assert_eq!(request, 19);
-    state.complete(Err(error.to_string()));
+    assert!(state.complete(Err(error.to_string())).is_err());
     assert_eq!(state.snapshot().entries.len(), 1);
     assert_eq!(std::fs::read(path).unwrap(), old);
     files.finish(None).await.unwrap();

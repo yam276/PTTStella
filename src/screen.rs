@@ -121,7 +121,38 @@ pub struct Screen {
     hyperlinks: Hyperlinks,
     mouse: crate::mouse::Modes,
 }
+/// Local document projection checkpoint, never a second ANSI interpreter.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SourceRendition {
+    pub(crate) style: Style,
+    next_cell_style: Option<Style>,
+}
 impl Screen {
+    pub(crate) fn source_rendition(&self) -> SourceRendition {
+        SourceRendition {
+            style: self.style,
+            next_cell_style: self.next_cell_style,
+        }
+    }
+    pub(crate) fn restore_source_rendition(&mut self, state: SourceRendition) {
+        self.style = state.style;
+        self.next_cell_style = state.next_cell_style;
+    }
+    /// Reuse the production rendition/parser for a local source glyph without
+    /// injecting a terminal C0 command. A synthetic CR would cancel SGR 66's
+    /// pending byte style before the first byte of a double-width character.
+    /// Only the local 2x1 composer projection calls this; live byte streams
+    /// continue to advance exclusively through feed.
+    pub(crate) fn project_source_glyph(&mut self, encoded: &[u8]) -> Option<(Style, Style)> {
+        if self.cols != 2 || self.rows != 1 || !(1..=2).contains(&encoded.len()) {
+            return None;
+        }
+        self.x = 0;
+        self.y = 0;
+        self.wrap = false;
+        self.feed(encoded);
+        Some((self.cells[0].style, self.cells[encoded.len() - 1].style))
+    }
     pub fn new(cols: usize, rows: usize) -> Result<Self, &'static str> {
         if cols == 0 || rows == 0 || cols.checked_mul(rows).is_none_or(|n| n > MAX_CELLS) {
             return Err("unsupported screen dimensions");

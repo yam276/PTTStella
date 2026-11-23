@@ -1,11 +1,11 @@
 //! One bounded button transaction. No I/O, retries, timers or display ownership.
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 use super::{Action, Button, encode};
 use super::{Error as FormatError, Modes, Report};
 use crate::navigation::Stamp;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 use std::time::Instant;
 
 pub const HOLD_LIMIT: Duration = Duration::from_secs(30);
@@ -39,7 +39,7 @@ pub struct Sample {
     pub sequence: u64,
     pub report: SampleReport,
 }
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum SampleOutcome {
     Bytes(Vec<u8>),
@@ -75,7 +75,7 @@ pub enum Route {
     Blocked,
 }
 #[derive(Clone, Copy)]
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 pub(crate) struct Context {
     pub stamp: Stamp,
     pub modes: Modes,
@@ -102,13 +102,13 @@ impl Error {
         }
     }
 }
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 struct Held {
     lease: Lease,
     button: Button,
     deadline: Instant,
 }
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 pub(crate) struct State {
     enabled: bool,
     policy_epoch: u64,
@@ -125,7 +125,7 @@ pub(crate) struct State {
     sample_window: Option<Instant>,
     samples: u8,
 }
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -146,7 +146,7 @@ impl Default for State {
         }
     }
 }
-#[cfg(any(feature = "desktop", test))]
+#[cfg(any(feature = "desktop-services", test))]
 impl State {
     pub(crate) fn observe(&mut self, context: Context, now: Instant) {
         if self.generation != context.stamp.generation {

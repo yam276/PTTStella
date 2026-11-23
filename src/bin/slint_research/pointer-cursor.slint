@@ -1,0 +1,27 @@
+export enum PointerKind { Rest, Action, Back, Forward, PreviousPage, NextPage, First, Last }
+
+export global PointerStyle {
+    // Arrow paths, colours and hotspots match the Dioxus cursor assets in app.css.
+    public pure function navigation(kind: PointerKind, selecting: bool) -> MouseCursor {
+        if selecting { return MouseCursor.text; }
+        if kind == PointerKind.Action { return MouseCursor.pointer; }
+        if kind == PointerKind.Back { return MouseCursor.custom(@image-url("../../../assets/cursors/back.svg"), 4, 16); }
+        if kind == PointerKind.Forward { return MouseCursor.custom(@image-url("../../../assets/cursors/forward.svg"), 28, 16); }
+        if kind == PointerKind.PreviousPage { return MouseCursor.custom(@image-url("../../../assets/cursors/previous-page.svg"), 16, 4); }
+        if kind == PointerKind.NextPage { return MouseCursor.custom(@image-url("../../../assets/cursors/next-page.svg"), 16, 28); }
+        if kind == PointerKind.First { return MouseCursor.custom(@image-url("../../../assets/cursors/first.svg"), 16, 4); }
+        if kind == PointerKind.Last { return MouseCursor.custom(@image-url("../../../assets/cursors/last.svg"), 16, 28); }
+        return MouseCursor.default;
+    }
+}
+
+// Slint reads mouse-cursor before pointer-event updates the Rust hit, and only
+// applies it while dispatching a pointer event. Surfaces record the last real
+// window position here so Rust can replay one ignored move after a cursor-only
+// change, including when the screen changes under a stationary pointer.
+export global PointerRefresh {
+    in-out property <bool> replaying;
+    in-out property <bool> inside;
+    in-out property <length> x;
+    in-out property <length> y;
+}

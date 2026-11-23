@@ -20,4 +20,10 @@ PTT 專用的按鈕登入／鑰匙圈、自動導覽、最近看板、內容名�
 
 驗證使用自製 Big5／GBK 位元組及獨立預期，包含每個分片、左右換色、無效字元、貼上及 session reset。本機 WS→Telnet 案例須核對 Close 順序、舊輸入零重播、精確 GBK bytes、PTT 命令拒絕及 TCP EOF；儲存需核對重新載入、原始備份、損壞與失敗。原生管理介面與各站登入結果依 active plan 分開記錄。
 
+同一 WebSocket 位址切換 Big5-UAO → GBK 的回歸，從第一筆連線起明確選用本機目標。探針扣住舊連線的 Close 回覆，確認新連線等到回覆後才建立，接著核對新世代、格線／色彩／殘留半字清除、舊按鍵拒絕及精確 GBK 收送。這項測試涵蓋兩個前端共用的 Connection，站點表單和實站維持各自驗收。
+
+Slint 合成站點表單可用 `PTTSTELLA_SLINT_SITE_SWITCH=same-endpoint pttstella-slint --software-renderer --probe-media --verify-media NEW_DIR` 重跑。以 Slint 鍵盤事件選取下拉選單，再執行表單的連線回呼，核對同一位址的 Big5-UAO → GBK → Big5-UAO、三次 Close、雙色中文字和零多餘輸入。實體按鍵與按鈕點擊另行驗收。
+
+站點表單依面板內容區域配置，避免視窗較寬時裁掉表單兩側及「連線切換」。X11 重跑可設定 `PTTSTELLA_SLINT_SITE_SWITCH=native-same-endpoint` 和 `PTTSTELLA_SLINT_SETTINGS_PROBE=native-quit`，沿用同一組啟動參數。在站點表單保留位址，先選 GBK 並點「連線切換」，再選 Big5-UAO 並點同一按鈕，最後正常關窗。探針期待三次同位址連線、三次 Close 及零站端輸入。驗證使用本機合成站。
+
 SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。

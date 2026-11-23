@@ -1,9 +1,9 @@
 {
   "source": "tooling/composer/editor.js",
   "build": "npm ci --ignore-scripts --prefix tooling/composer && npm run build --prefix tooling/composer",
-  "source_sha256": "0fe4c33541a4bb127447548b6f33384cdab0003d511aa8aad5b1e859ce068cf6",
+  "source_sha256": "14429149b001f9b71009b177b4c812bacefe75cca6036c3ee833e749e2305c99",
   "lock_sha256": "5834924c6f65c640ca705df81dd5acc2e4df91c212f29788e4f98f04224f952d",
-  "bundle_sha256": "6077cbf69e67320263dc4e3d632796b34518f93d82675409be87cf7dafe49ac7",
+  "bundle_sha256": "4df0606bd52d1f7a7d36a4aa45637d0455ebb58de58066bea6c57e5e49412482",
   "packages": [
     {
       "name": "@codemirror/commands",

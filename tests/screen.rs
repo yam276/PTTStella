@@ -430,3 +430,17 @@ fn sgr66_latch_survives_separate_escape_commands_until_printable_cell() {
         );
     });
 }
+
+#[test]
+fn native_frontends_share_a_checked_eighty_by_twenty_four_replay() {
+    let bytes = pttstella::replay::parity_grid().unwrap();
+    let mut baseline = Screen::new(80, 24).unwrap();
+    baseline.feed(&bytes);
+    pttstella::replay::verify_parity_grid(&baseline.frame()).unwrap();
+    for split in 0..=bytes.len() {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&bytes[..split]);
+        screen.feed(&bytes[split..]);
+        assert_eq!(screen, baseline, "split after byte {split}");
+    }
+}

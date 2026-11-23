@@ -1,0 +1,172 @@
+# Slint 候選產品來源還原
+
+候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
+
+## 2026-11-13 118a1d9 候選來源
+
+四架構及 Windows Setup 同取乾淨 `118a1d9`。既有 `sources.json` 新增 `edge-fetch-candidate`，隔離還原 837 份產品檔，核對 Git tree `cbfeb5560b17d00efe6df133443c4f14e43e0c58`。manifest SHA-256 為 `037c1b07aa035af5fed97284321f1dd5e8f5ed875472b4cf868376a6b5c184f8`。Apple Silicon 由還原來源離線重編，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯和測試禁止讀取原 worktree，執行測試使用 loopback。暫存已清理，沿用固定 Cargo 快取。收據在 `.local/verification/slint-edge-fetch/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
+
+## 2026-11-13 cbe9426 候選來源
+
+四架構與 Windows Setup 同取乾淨 `cbe9426`。既有 `sources.json` 新增 `segment-navigation-candidate`，隔離還原並核對 837 份產品檔及 Git tree `069e219a663652d9e6be045f3c2f6c559f9d6677`。manifest SHA-256 為 `99727d4235c57f51b3fa7e7ec7be7bfa6a8257e06b3e38b9e7be6a4d07d19e44`。Apple Silicon 由還原來源離線重編，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯和測試皆禁止讀取原 worktree 的來源，測試使用 loopback。暫存已清理，沿用固定 Cargo 快取。收據在 `.local/verification/slint-segment-navigation/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
+
+## 2026-11-13 299a0b3 候選來源
+
+四架構及 Windows Setup 同取乾淨 `299a0b3`。既有 `sources.json` 新增 `login-panel-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `8e929ef4327da05eb54da0efb4937b86145f0539`。manifest SHA-256 為 `483c1cf51c103500b15f6537229388ebf03bd5d13933013405bed3c28120425d`。Apple Silicon 以還原來源離線編譯，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯和測試禁止讀取原 worktree 的來源，執行測試時允許 loopback。暫存還原目錄已移除，沿用固定 Cargo 快取。收據在 `.local/verification/slint-login-panel-candidate/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
+
+## 2026-11-13 3277ac1 候選來源
+
+四架構及 Windows Setup 同取乾淨 `3277ac1`。既有 `sources.json` 新增 `video-toggle-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `40aeceaceaea8ba512a58430363436490340b47e`。manifest SHA-256 為 `fdf2fd95bcb5dcf141917f6572f6cbd9a8a1e7426b4932366439cb715a0325b6`。Apple Silicon 由還原目錄離線編譯，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯與測試皆禁止讀取原 worktree 來源，執行測試時允許本機連線。還原暫存已清理，沿用固定 Cargo 快取。收據在 `.local/verification/slint-video-toggle/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
+
+## 2026-11-13 2ef65ce 候選來源
+
+四架構與 Windows Setup 同取乾淨 `2ef65ce`。既有 `sources.json` 新增 `sites-panel-candidate`，獨立還原 837 份來源並核對 Git tree `7bf903c80c3f9c4660f70d22ae0eb60b3fd8b043`。四架構 manifest SHA-256 為 `6306ae948aea3a7adb07867e9bd49021183c3fcc9ef2190a644791945da5db26`。Apple Silicon 由還原來源離線重編，禁止讀取原 worktree 來源，測試使用本機 loopback。Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。收據在 `.local/verification/slint-sites-panel-candidate/`。第三方來源閉包與其餘架構的還原重編待驗。
+
+## 2026-11-13 d047e55 候選來源
+
+四架構與 Windows Setup 同取乾淨 `d047e55`。在既有 `sources.json` 加入 `windows-refresh-rate`，獨立還原 837 份來源並核對 Git tree `6fd5a9fcd72c2b9d1061a833b55b52e1e81809d9`。四架構 manifest SHA-256 為 `71a54673a1bb98a78161ae18543ecf76aef26d3e2ab1293cf0c42095069d0cc7`。以 Apple Silicon 從還原來源重編測試時，編譯禁用網路和原 worktree 來源讀取，執行測試開放本機 loopback。Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。收據在 `.local/verification/slint-windows-refresh-rate/`。第三方來源閉包和其他架構的還原重編待驗。
+
+## 2026-11-13 96e5159 候選來源
+
+四架構及 Windows Setup 同取乾淨 `96e5159`。既有 `sources.json` 新增 `settings-focus-mount` 對應。從隔離位置核對 837 份來源與 Git tree `bae1c6eeae5734c72e6de4ad1fc86a3e22c12e5b`，manifest SHA-256 為 `e4fecea77c199d1166c505ed57542bd59acf7b8b0c1c40aad35990b40ed5b2ed`。驗證後清理暫存還原目錄，收據在 `.local/verification/slint-settings-focus-mount/all-source-delivery.json`。
+
+Apple Silicon 使用還原來源與固定 Cargo 快取重編 release 測試。編譯階段禁止網路及原 checkout 來源讀取，測試保留本機合成連線。Slint 110 項與播放器 1 項通過，既有原生 helper 一項忽略。暫存來源已清理，完整結果在同目錄的 `source-build-result.json`。第三方來源閉包及其他架構的還原重編仍待驗。
+
+## 2026-11-13 57e000c 候選來源
+
+四架構及 Windows Setup 同取乾淨 `57e000c`。既有來源包的 `sources.json` 新增 `passive-window-candidate`，保留其他版本對應。用新目錄隔離網路及原 worktree 讀取，核對 837 份產品檔案與 Git tree `4027c438c508555285ae8e7ed3c2458f4c8b5eee`，包含 Winit 上游來源及本機修補。manifest SHA-256 為 `97f519773b3ad2fdf6b7ee24495f93fa3d5bf6ce4abd725c0e00b10d5cb8a9a4`。收據在 `.local/verification/slint-passive-window-candidate/all-source-delivery.json`。
+
+Apple Silicon 用還原來源及既有 Cargo 快取重編 Slint 與播放器的 release 測試。還原與編譯隔離網路，測試執行保留 loopback，原 worktree 來源在各階段均禁止讀取。Slint 110 項與播放器 1 項通過，一項既有原生 helper 忽略。首輪沙盒規則擋到快取 dep-info，第二輪完成編譯但阻擋測試的 loopback。兩輪記錄與最終通過結果保留在同目錄的 `source-build-*.log` 和 `source-build-result.json`，三個還原暫存目錄已清理。第三方來源閉包、四架構從還原來源重編及封裝二進位的逐位元重現仍待驗。
+
+## 2026-11-13 草稿工具列候選來源
+
+四架構及 Windows Setup 同取乾淨 `b57eae8`。既有產品來源清單加入下載與執行檔雜湊，使用 `--candidate draft-history-macos-windows` 在禁止網路及 worktree 讀取的目錄還原 619 份檔案，核對 Git tree `23b3649fa85be0d2945152df68e19cdee3af6b76`。manifest SHA-256 為 `05213380bd4139ff70bf0ea38ef91b9c8d3655190cb21d77dad952e63c7f727e`。收據在 `.local/verification/slint-draft-history/all-source-delivery.json`。
+
+## 2026-11-13 草稿與文章被動驗收候選來源
+
+Apple Silicon、Windows x64 便攜及離線 Setup 取自 `675b150`，Intel Mac 與 Linux x64 使用只多三份文件變更的 `4f95094`。既有 `product-source-20261111-6ad8e39/sources.json` 已加入四架構的下載及主程式雜湊。以 `--candidate passive-drafts-reading-macos-windows` 在禁止網路與原 worktree 讀取的目錄還原，核對 619 份產品檔案和 Git tree `2df7c8e8db5e5c3d607fd192d57567921f4021fa`。manifest SHA-256 為 `2ddcca1ee9e5a053fb8917c8e73ed37429374f0a307edbb1f08c20fa2f162365`。收據在 `.local/verification/slint-passive-drafts-reading/all-source-delivery.json`。
+
+## 2026-11-13 文章逐行對齊候選來源
+
+四架構候選 `9376627` 的下載及主程式雜湊已加入既有 `product-source-20261111-6ad8e39/sources.json`，包含 Windows 離線 Setup。Intel Mac 與 Linux x64 的實際建置提交 `04191e1` 僅多三份文件變更。用 `--candidate article-arrow-macos-windows` 從原 bundle 和對應 patch 獨立還原，核對 619 份產品檔案及完整 Git tree。新版 manifest SHA-256 為 `34b23e472cea254c05fbacff33eb5dd36e19eeb64543b424b49d4ea3ccb12e26`。證據及暫存清理見 `.local/verification/slint-article-arrow-alignment/all-source-delivery.json`。
+
+## 2026-11-13 收藏載入焦點修正的候選來源
+
+Apple Silicon 與 Windows x64 便攜候選 `4d7d174` 的 619 份產品檔案已在禁止網路和原 worktree 讀取的獨立目錄還原，核對逐檔 SHA-256 和 Git tree `87788b45fe5969a9366075797d1e8f3464c9e532`。兩個 ZIP 內的主程式雜湊與各自的封裝收據相符。[Windows Setup](slint-windows-candidate.md#2026-11-13-收藏載入焦點修正的離線-setup) 另經解包逐檔核對與便攜 ZIP 一致。
+
+既有交付 `product-source-20261111-6ad8e39/` 的 `sources.json` 已在同一組對應補入 Windows Setup、Intel Mac 和 Linux x64 的下載與主程式雜湊。Intel Mac 與 Linux x64 的建置提交為僅多三份文件變更的 `ebc1035`，產品程式與封裝流程相同。新版 manifest SHA-256 為 `ccbf252e579a139bb3a62aa3f0778d15ae0ca9099d89dedc23a2b5bab1a405fd`。從該交付目錄執行下列指令，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate bookmark-load-macos-windows --output /ABS/PATH/new-source
+```
+
+更新四平台對應後再還原一次，619 檔與完整 Git tree 核對通過。原始封裝對應、還原與暫存清理收據在 `.local/verification/slint-cross-bookmark-load/`。還原來源的重新編譯與完整第三方來源閉包仍待驗。
+
+## 2026-11-13 浮球與收藏修正候選來源
+
+Apple Silicon 與 Windows x64 便攜候選使用 `d37c7fb`。既有交付的 `sources.json` 新增 `bookmark-focus-macos-windows`，沿用原 Git bundle，並保留舊候選對應。還原時禁止網路及讀取原 worktree，619 份產品檔案和完整 Git tree `a98a8dd349e7202d54c3c33a6ad3919250552401` 核對通過。兩個 ZIP 內的執行檔雜湊均對上各自的封裝收據。
+
+新 manifest SHA-256 為 `e88e662ad6cbb1b0ab609efab4d5cf55f494d529855156402fe1a10286594c11`。從既有來源交付目錄執行下列指令，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate bookmark-focus-macos-windows --output /ABS/PATH/new-source
+```
+
+首輪核對誤把還原工具留下的暫存區變更當成工作目錄異動。重跑分別核對 index tree、工作目錄及未追蹤檔案後完成交付。還原目錄已移除。收據位於 `.local/verification/slint-current-shell/layout-source-delivery.json`。本輪未重編還原來源，完整第三方來源閉包仍待驗。
+
+## 2026-11-12 四架構現行候選來源
+
+既有交付目錄 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/` 已加入現行候選的兩份來源對應。沿用原 bundle，另加兩份 patch，既有 12 組對應保留。
+
+| 來源選項 | 原建置 commit | 對應平台 | 已還原檔案 |
+| --- | --- | --- | ---: |
+| `ime-edge-macos-windows` | `4e28e82` | Apple Silicon、Windows x64 | 619 |
+| `ime-edge-intel-linux` | `06487df` | Intel Mac、Linux x64 | 619 |
+
+兩組 tree 僅 `docs/slint-evaluation-plan.md` 與 `docs/slint-windows-candidate.md` 不同。還原器在新目錄驗證完整 Git tree 與逐檔 SHA-256，沙盒禁止網路及讀取原 worktree。兩版 macOS App 的簽章、ZIP 內的主程式與 DMG 雜湊均核對。Windows 核對 ZIP 內主程式與 Setup 雜湊，Setup 內檔案對應沿用 926 檔的解包驗證。Linux 直接從 tar.gz 與 deb 串流讀出主程式核對，未展開完整候選。
+
+`sources.json` SHA-256 為 `c957b116e22be575c19454d6fc8ba99e38b2546ac415832786c2faa453660d5f`。從交付目錄執行，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate ime-edge-macos-windows --output /ABS/PATH/new-source
+```
+
+Intel Mac 的 32 份來源封存另與現行包內的建置紀錄逐一核對。47 個播放器 runtime 函式庫皆對上既有重建輸出雜湊及封裝後雜湊。此次未從還原目錄重新編譯 Rust／Skia 或重跑第三方建置，整體第三方來源交付仍待驗。[Intel runtime 來源紀錄](slint-native-source-replay.md#2026-11-12-現行-intel-候選的-runtime-來源核對)
+
+四架構的原始 build record、封裝雜湊、還原結果及清理紀錄位於 `.local/verification/slint-source-current/`。同一暫存路徑依序還原兩組，檢查檔案、所有權及 open files 後已移除；沒有新增 Cargo target。來源交付、先前 manifest 與四個現行候選包保留。
+
+## 2026-11-11 產品來源包
+
+本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、九份 patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
+
+| 選項 | 對應候選 | 產品核對 commit | 完整 tracked 檔案 | 建置輸入核對 |
+| --- | --- | --- | --- | --- |
+| `shell-layout-cross-current` | 最新 Linux／另備 Windows | `ff0ae84` | 580 | 380 |
+| `article-focus-cross-current` | 歷史 Linux／另備 Windows | `35b43e4` | 580 | 380 |
+| `article-focus-macos-current` | 最新 macOS arm64／x64 | `c7368b2` | 580 | 380 |
+| `settings-macos-current` | 歷史 macOS arm64／x64 | `dbbce24` | 580 | 380 |
+| `reading-cross-current` | 歷史兩Mac／另備Windowsfe8872f6 | `7466c31` | 580 | 380 |
+| `reading-current` | 歷史 Linux150c1a0d | `fbcfe2e` | 580 | 380 |
+| `filter-current` | 歷史 Mac arm64／x64 | `6ad8e39` | 580 | 380 |
+| `filter-cross-current` | 歷史 Linux4fa／Windowsac788a45 | `61d1c3f` | 580 | 380 |
+| `macos-arm64-current` | 歷史 Mac arm64 | `9a06515` | 580 | 380 |
+| `cross-current` | 歷史 Linux／Windows備妥包／Mac x64 | `9db9eda` | 580 | 380 |
+| `linux-84e-baseline` | 歷史 Linux x64 | `84e98a3` | 546 | 289 |
+| `windows-intel-475-baseline` | 待使用者測試的 Windows69542cb7／歷史 Mac x64 | `475897f` | 545 | 288 |
+
+最新 Linux `68601365` 與另備 Windows `3a8de2a9` 由 `shell-layout-cross-current` 還原。用同一 bundle 與 `product-shell-layout-cross.patch` 核對乾淨 `ff0ae84` 全部 580 檔及 tree `ea701ab16a45962c9a9fc20f36e4540ec883ff5c`。現行 manifest SHA-256 為 `914d94f7418e302b492990ae3070f9dfba8309a9dc6baaf79cf6dc5be39727f7`。與 macOS 候選的 380 份建置輸入相比，差異為 `shell_probe.rs`。還原後的獨立編譯與第三方完整來源仍待驗。
+
+歷史 Linux `af476061` 與另備 Windows `b436d99c` 用 `article-focus-cross-current`。同一 bundle 加 `product-article-focus-cross.patch` 還原乾淨 `35b43e4` 的全部 580 檔與 tree `40c52d6d226500b0becd12fb2362940425356a0e`。當時 manifest SHA-256 為 `854a75daf0fd0d7900268e019d38578f4713eff67277640dda13530e2f13c0c1`，保留先前 descriptor。與最新 macOS 只差四份文件；在原 worktree 交叉編譯與獨立還原皆通過，未從還原目錄再編譯，也未驗證第三方來源閉包。
+
+最新 macOS 用 `article-focus-macos-current`。同一 bundle 加 `product-article-focus-macos.patch` 從新目錄還原乾淨 `c7368b2` 的全部 580 檔與 tree `14badb5cdcf6c01f79e707fdcc9bf041d69bea3d`。綁定 Apple Silicon `793ecb91` 和 Intel `62ada42e`。當時 manifest SHA-256 為 `9d9fdc5f0eab9a7dac7df98c6248001bc36aab8e0f43cc3342b15b2947c159ea`，原 descriptor 全部保留。完整來源還原與這次封裝後回歸各自有收據；獨立還原來源再編譯及第三方完整來源仍待驗。
+
+歷史 macOS 用 `settings-macos-current`。同一 immutable bundle 加 `product-settings-macos.patch` 可從新目錄還原乾淨 `dbbce24` 的完整 580 檔與 tree `9dc253a72acbeeb20c364efcf9cf2ed54f6057a4`，綁定封裝執行檔 Apple Silicon `99949409` 和 Intel `4d7e344c`。當時 manifest SHA-256 為 `9a8918e80c2593da33721e6bcea132599e1e9dfade020528c65d508c5268e49a`。其餘 descriptor 完整保留。此批驗證還原與完整檔案清單，獨立還原來源編譯及第三方完整來源仍待驗。
+
+歷史Mac與另備Windows使用 `reading-cross-current`，同一bundle加 `product-reading-cross.patch` 還原乾淨7466完整580檔／tree `164f4be07417edde599b4f538e70e82b8ae2f6c6`，綁定封裝ARMf50ffb46／Intelb9fa63fa／Windowsfe8872f6。三份原始build record保留；與Linuxfbc完整tree只差三份文件，其餘577檔及380份產品選集相同。本輪沒有重做獨立還原來源編譯；前輪fbc一般Slint106項／1 helper ignored屬於相同非文件來源。所有既有descriptor與immutable bundle保持不變，新manifest SHA為 `41093833cc6378214fc235a538e3dca1484b5af7760f201dd024ba7499c7f1bc`。還原checkout使用同一repo外暫存路徑，核對後移除，沒有新Cargo target。
+
+歷史 `reading-current` 在同一交付加入 `product-reading.patch`，保留 immutable bundle 與既有六份descriptor，還原已提交fbcfe2e的完整580檔／tree `f3a4ec30192e3ecf0f510d6494a33bf5d8d6565b`，綁定Linux ELF150c1a0d。原編譯仍記為f40e793 dirty，測過的完整七檔patch與f40e793到fbcfe2e逐byte相同，沒有轉稱乾淨來源重建。
+
+本批另從還原checkout完成macOS arm64一般Slint配置獨立建置：106 passed／1 explicit native helper ignored。sandbox拒讀原worktree來源（Cargo.toml負向control確實被拒），只允許固定Cargo target快取；還原目錄移到repo外同一可重用暫存路徑，避免Cargo搜尋ancestor manifest。原始command／log與580檔SHA核對保存在 `slint-renderer-api-current/cross-current/filter-package-current/chrome-current/refined/`，驗後還原checkout移除。這不是冷依賴建置、native-player／其他架構來源閉包、原生操作或逐byte二進位重現。該輪sources.json SHA為 `400bef10edf0702be2a2d9f4dde750c90a4a5f353ac89c970da1b30840178b17`。
+
+上述 commit 是已核對產品檔案的版本。最新兩Mac實際原建置為a63c303 dirty，加frozen三檔patch；該patch與已提交6ad8e39產品／測試修改逐byte相同。ARM raw59c1c58f／封裝0b2f5786、Intel raw64a2caf1／封裝ae54f0bd，各原始build record保留。本批從新目錄還原filter-current完整580檔及tree `6c9d5b29336cbc36e7eef2a80f481b846d160c05`；只做來源還原，未重做獨立編譯。manifest 綁定封裝內執行檔完整SHA，核對完整 Git tree、所有 tracked 檔案的 SHA-256 與檔案清單，不只核對少數 Rust 檔案。
+
+Linux4fa0a14e與備妥Windowsac788a45從乾淨61d1c3f完成release／all-target Clippy。`filter-cross-current`已在同一可重用暫存路徑重新還原完整580檔／tree `4c9a8f5b97da144e7385d24f472fc764bf6831df`，與Mac6ad只有兩份文件不同，其餘578檔及380份產品選集相同；驗後移除還原目錄。這不是獨立來源編譯或Windows原生結果，Linux七過三敗的實際scope與未解PNG／QEMU反例另見主計畫。後續未採用的probe準備／trace實驗只保存在驗收patch及單一未解CLI，未混入此乾淨來源或封裝SHA。
+
+歷史arm64的原建置是 `aff5ac8` 加 snapshot／raster 修補；乾淨 `9a06515` 再執行Cargo時命中快取，0.32秒結束且raw SHA不變，不能改稱重新編譯。歷史Linux基準則是 `c67efdb` 加patch。舊ARM封裝f211c341等mapping保留供歷史證據核對。
+
+先前三個交叉編譯目標從乾淨9db9eda完成 release／all-target Clippy；Windows raw487c428b、舊Intel rawbb3185a3／封裝e232fd01、Linux8fa36bcd分別綁定manifest。它們與ARM9a的380份建置輸入全部相同，完整tracked tree僅差兩份文件。上段c67加patch是歷史Linux基準，不是最新Linux包。`cross-current`已另從同一immutable bundle＋文件patch核對580檔及完整tree，還原暫存目錄驗後移除；沒有再建新Cargo target或宣稱新的獨立跨平台建置。
+
+從來源包目錄執行（Python 3.11+、Git；目的地須尚不存在）：
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate shell-layout-cross-current --output /ABS/PATH/new-source
+```
+
+一般 Slint 配置可在還原的 checkout 執行：
+
+```sh
+cargo test --release --locked --no-default-features \
+  --features slint-research --bin pttstella-slint
+```
+
+Rust 版本依 `rust-toolchain.toml`；公開 crates、Skia 與平台系統依賴仍需正常取得。先前9a來源以 macOS arm64 的公開 Cargo cache／已安裝工具鏈，從新還原目錄建置，103 項測試通過、1 項 helper ignored。sandbox 拒讀原 checkout 的來源，只允許同一固定 compiler cache；log 顯示 root 與 vendored renderer 都從還原目錄編譯，未使用研究 runtime 或交叉 SDK。這份歷史獨立建置證據不能直接套用6ad新patch；6ad本批只有完整來源還原與原worktree回歸／封裝證據。這不是冷依賴建置、播放器配置重建、逐 byte 二進位重現或 Windows／Intel／Linux 原生編譯驗收。
+
+bundle SHA-256 為 `44cff20e28bf51c85bb1c2533705df67a9a1d5fe1ff96db0500f405b8cf82b26`，包含三個完整來源版本及新增 renderer 修補／授權；9db來源包與前一個 `product-source-20261111-9a06515/` 以hardlink共用此immutable bundle，交付時是完整regular file。先前在原 worktree 子目錄還原的建置因 Cargo 搜尋 ancestor manifest 而被 sandbox 拒絕；移動同一 checkout 到原 worktree 之外的來源交付目錄後通過，沒有修改 manifest 來繞過核對。之後依序重用同一臨時路徑核對 Linux、Windows／Intel，580／546／545 檔與完整 tree 全部相符，再確認 Git clean／逐檔 SHA／無 open files 後移除。日常編譯沿用固定 worktree／Cargo cache。舊 `product-source-20261110-09a13da/` 與共用其 immutable bundle 的 `product-source-20261110-c906776/` 保留供歷史交付對照。
+
+## 工具驗證與剩餘範圍
+
+[還原工具](../tooling/reconstruct_slint_source.py) 僅接受 bounded regular manifest／bundle／patch，拒絕路徑跳脫、payload symlink 與既有目的地。它使用明確 SHA-1 Git object format、停用外部 Git 設定與 hooks，還原後比對 tree、檔案 hash 及完整 tracked inventory。
+
+[六項自製 fixture 測試](../tooling/test_reconstruct_slint_source.py) 涵蓋移除原 checkout 後的完整還原、patch 與新檔、損壞或 symlink bundle、既有目的地保護、路徑／必要清單拒絕，以及錯 tree／hash／遺漏檔案拒絕。fixture 不依賴產品的私有資料或原 repo Git history。
+
+產品來源包已還原，不代表完整第三方對應來源已交付。播放器與其靜態／動態依賴、Skia、各平台工具與可重跑 recipe／來源閉包仍須逐項綁定；候選原 `source_delivery: not_ready` 維持不變。詳細來源、實際命令、工具鏈、還原結果、獨立建置與本批清理紀錄在 `slint-renderer-api-current/`；前輪兩組紀錄在 `slint-source-reconstruction/`。整體 S0–S8 及 S9 邊界依 [主計畫](slint-evaluation-plan.md)。
+
+後續已完成 [macOS x64 的 32 套件乾淨來源重建](slint-native-source-replay.md)，並核對 47 個 runtime library；首輪 MP4 fixture 逾時仍未定因，解碼重複性與完整跨平台來源交付維持 `not_ready`。
+
+## 2026-11-13 cb4fbfc 候選來源
+
+`article-arrow-candidate` 已加入既有來源交付的 `sources.json`，綁定四架構主程式及下載包 SHA-256。用原 bundle 和對應 patch，在禁止網路與原 worktree 讀取的環境獨立還原 837 個檔案，驗證完整 Git tree `c290918d200677eaa3f4591c4ccf4708e3b1f2fd`。來源及暫存清理收據在 `.local/verification/slint-article-arrow/source-delivery.json`。這次驗證涵蓋產品樹，第三方 runtime 來源與乾淨環境重建分列。

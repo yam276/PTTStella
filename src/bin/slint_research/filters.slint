@@ -1,0 +1,107 @@
+import { ListView } from "std-widgets.slint";
+import { PanelButton, PanelCombo, PanelField, PanelScrollBar, PanelOverlay, PanelScrollView } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
+
+export global FiltersState {
+    in-out property <[string]> labels;
+    in-out property <[string]> entries;
+    in-out property <[string]> colors;
+    in-out property <[string]> individual-colors;
+    in-out property <bool> writable;
+    in-out property <bool> busy;
+    in-out property <bool> preview;
+    in-out property <bool> importing;
+    in-out property <bool> composing;
+    in-out property <string> message;
+    in-out property <string> empty-message;
+    in-out property <bool> category-sort;
+    in-out property <bool> allow;
+    in-out property <int> choice:-1;
+    in-out property <string> account;
+    in-out property <string> note;
+    in-out property <int> policy;
+    in-out property <int> entry-color;
+    in-out property <int> shared-color:13;
+    callback tab(bool);
+    callback sort;
+    callback choose(int);
+    callback new-entry;
+    callback field-edit(int,string)->string;
+    callback action(int);
+    callback close-filters;
+    in-out property <int> focus-account-sequence;
+    public function focus-account() { root.focus-account-sequence += 1; }
+}
+
+export component FiltersPanel inherits PanelOverlay {
+    heading: FiltersState.labels[0];
+    panel-width: 840px; panel-height: 700px;
+    private property <int> focus-account-sequence: FiltersState.focus-account-sequence;
+    changed focus-account-sequence => { if root.visible { account-field.focus(); } }
+    keys:=FocusScope {
+        width:parent.width;height:parent.height;
+        key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !FiltersState.composing {FiltersState.close-filters();return accept;}return reject;}
+        PanelScrollView {
+            content-width: self.visible-width;
+        VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
+            HorizontalLayout {
+                alignment: start; spacing: 8px;
+                PanelButton {text:FiltersState.labels[1];checked:!FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(false);}}
+                PanelButton {text:FiltersState.labels[2];checked:FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(true);}}
+                PanelButton {text:FiltersState.category-sort?FiltersState.labels[5]:FiltersState.labels[4];icon:LucideIcons.list-filter;icon-size:16px;enabled:!FiltersState.composing;clicked=>{FiltersState.sort();}}
+                PanelButton {text:FiltersState.labels[3];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.new-entry();}}
+            }
+            Rectangle {
+                height: 156px;
+                entries := ListView {
+                    x: 0px; width: parent.width - entries-scrollbar.width; height: parent.height;
+                    vertical-scrollbar-policy: always-off;
+                    for entry[index] in FiltersState.entries: PanelButton {
+                        text:entry;checked:FiltersState.choice==index;enabled:!FiltersState.busy && !FiltersState.composing;
+                        clicked=>{FiltersState.choose(index);}
+                    }
+                }
+                entries-scrollbar := PanelScrollBar {
+                    x: parent.width - self.width;
+                    content-height: entries.content-height; content-y <=> entries.content-y;
+                }
+            }
+            if FiltersState.entries.length==0: Text {text:FiltersState.empty-message;color:#c7d4e7;}
+            HorizontalLayout {
+                VerticalLayout {
+                    Text {text:FiltersState.labels[6];color:#c7d4e7;}
+                    account-field:=PanelField {text<=>FiltersState.account;accessible-label:FiltersState.labels[6];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing;edited=>{self.text=FiltersState.field-edit(0,self.text);}}
+                }
+                VerticalLayout {
+                    Text {text:FiltersState.allow?FiltersState.labels[9]:FiltersState.labels[7];color:#c7d4e7;}
+                    if !FiltersState.allow: PanelCombo {model:[FiltersState.labels[8],FiltersState.labels[10]];current-index<=>FiltersState.policy;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                    if FiltersState.allow: PanelCombo {model:FiltersState.individual-colors;current-index<=>FiltersState.entry-color;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                }
+            }
+            Text {text:FiltersState.labels[11];color:#c7d4e7;}
+            note-field:=PanelField {text<=>FiltersState.note;accessible-label:FiltersState.labels[11];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing;edited=>{self.text=FiltersState.field-edit(1,self.text);}}
+            HorizontalLayout {
+                alignment: start; spacing: 8px;
+                PanelButton {text:FiltersState.labels[12];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(0);}}
+                PanelButton {text:FiltersState.labels[13];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(1);}}
+            }
+            if FiltersState.allow: HorizontalLayout {
+                Text {text:FiltersState.labels[14];color:#c7d4e7;}
+                PanelCombo {model:FiltersState.colors;current-index<=>FiltersState.shared-color;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                PanelButton {text:FiltersState.labels[15];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(2);}}
+            }
+            Text {text:FiltersState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+            HorizontalLayout {
+                alignment: start; spacing: 8px;
+                PanelButton {text:FiltersState.labels[16];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(3);}}
+                if FiltersState.preview: PanelButton {text:FiltersState.labels[17];enabled:!FiltersState.busy && !FiltersState.composing;clicked=>{FiltersState.action(4);}}
+                if FiltersState.importing: PanelButton {text:FiltersState.labels[18];enabled:!FiltersState.composing;clicked=>{FiltersState.action(5);}}
+                PanelButton {text:FiltersState.labels[22];enabled:!FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(6);}}
+                if !root.embedded: PanelButton {text:FiltersState.labels[19];enabled:!FiltersState.composing;clicked=>{FiltersState.close-filters();}}
+            }
+            Text {text:FiltersState.labels[20];color:#9ab5ce;wrap:word-wrap;}
+            Text {text:FiltersState.labels[21];color:#9ab5ce;wrap:word-wrap;}
+        }
+        }
+    }
+}

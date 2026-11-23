@@ -432,6 +432,26 @@ test('cached footer uses each source page cell style, including both halves, wit
 });
 
 
+test('cached footer colours follow the local end state, not the nearest source page',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const old={fg:7,bg:0,bright:false,inverse:true},middle={fg:0,bg:6,bright:false,inverse:false},final={fg:7,bg:4,bright:false,inverse:false};
+    const glyphs=Array.from(' 2/2 (100%) ',(text,col)=>({row:12,col,width:1,text,left:old,right:old}));
+    const pages=[{line:1,number:1,styles:Array.from({length:80},()=>({...middle}))},{line:7,number:2,styles:Array.from({length:80},()=>({...final})),end:true}];
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:12,end:true,percent_cells:{start:6,end:9},page_cells:{start:1,end:2},pages},
+        frame:{cols:80,rows:13,revision:4,glyphs},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt,colour=()=>e.rendered.at(-1).frame.glyphs[0].left;
+    e.viewport.scrollTop=144;e.ui.layout(packet,base,1);
+    assert.equal(text(),' 2/2 ( 75%) ');assert.deepEqual(colour(),middle,'before 100% the end page colours are not borrowed');
+    e.ui.layout({...packet,article:{...packet.article,pages:[pages[1]]}},base,1);
+    assert.deepEqual(colour(),final,'with only the end page cached its colours remain');
+    e.viewport.scrollTop=0;e.viewport.clientHeight=576;e.canvas.height=576;e.ui.layout(packet,base,1);
+    assert.equal(text(),' 2/2 (100%) ','a tall viewport at 100% shows the end page even while its top is nearest page one');
+    assert.deepEqual(colour(),final);
+    assert.deepEqual(glyphs[0].left,old);
+    await e.ui.destroy();
+});
+
+
 test('cached End and wheel stop at renderer height even if the DOM reports stale overflow',()=>{
     const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
     const context={latest:{connected:true,article:{first_line:1,end:true}},viewport:{scrollTop:0,scrollHeight:5000,clientHeight:576},

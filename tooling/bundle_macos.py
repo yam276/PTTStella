@@ -24,7 +24,7 @@ def run(*command):
 
 
 def build():
-    return bundle_common.build()
+    return bundle_common.build(features='desktop', binary='pttstella-dioxus')
 
 
 def check_dependencies(executable):

@@ -99,6 +99,7 @@ profile-unknown-action = 未知設定檔操作
 link-open-failed = 無法開啟網址：{ $e }
 link-stale = 畫面已更新，請重新選取網址
 paste-stale = 連線已變更；貼上未送出
+paste-send-unconfirmed = 貼上送出狀態未確認
 cleanup-listeners-failed = 畫面監聽器清理驗證失敗
 command-stale = 連線已變更；操作結果未確認，不會重送
 probe-timeout = 畫面探針等待操作逾時
@@ -221,10 +222,6 @@ vim-cursor = Vim 已暫停：選取指標或游標位置未確認；按 i 原始
 vim-count-unsupported = 不支援此計數指令
 vim-count-capacity = 導覽計數超過輸入容量；整個指令未送出
 vim-count-rejected = 超限計數的整個指令未送出
-vim-g-unsupported = 不支援此 g 指令
-vim-chord-unsupported = 此組合未提供 Vim 瀏覽
-vim-chord-count = 此組合或計數未提供 Vim 瀏覽
-vim-key-unsupported = 此按鍵或計數未提供 Vim 瀏覽；按 f 原生一次，或 i 原始輸入
 encoding-unencodable = 文字無法以目前站點的編碼送出
 selection-outside = 選取範圍超出畫面
 link-invalid = 網址格式不正確
@@ -270,6 +267,10 @@ video-title = 影片預覽
 image-title = 圖片預覽
 video-player = 影片播放器
 video-pause = 暫停影片
+video-volume = 音量
+video-position = 播放進度
+video-mute = 靜音
+video-unmute = 取消靜音
 media-playing = 播放中
 video-play = 播放影片
 media-paused = 已暫停
@@ -340,6 +341,7 @@ menu-select-all = 全選
 menu-minimize = 縮到最小
 menu-maximize = 縮放
 menu-fullscreen = 切換全螢幕
+slint-menu-view = 檢視
 menu-close = 關閉視窗
 
 font-local-ascii = 本機英數字型
@@ -527,6 +529,7 @@ context-copy = 複製選取文字
 context-copy-ansi = 複製含 ANSI 色碼
 context-copy-link = 複製完整網址
 context-open-link = 開啟連結／預覽圖片
+context-open-link-external = 在瀏覽器開啟連結
 context-select-link = 選取完整網址
 context-select-all = 選取整頁文字
 context-export-rows = 匯出選取行 PNG…
@@ -696,6 +699,11 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = 關閉設定
 about-author = 作者：{ $author }
 about-version = 版本：{ $version }
+about-font-sources = 字型來源
+about-icon-licenses = 圖示授權
+about-dependency-licenses = 第三方元件授權
+about-full-notice = 完整授權
+about-package-notices = 其餘第三方元件的授權文件隨安裝包附上。
 
 copy-png = 複製整頁 PNG
 copy-rows-png = 複製選取行 PNG
@@ -860,3 +868,39 @@ draft-template-changed = 站端標題或正文已修改，已停止帶入。請�
 draft-title-invalid = 標題不可空白、含控制字元，或超過 PTT 的 60 編碼 bytes。
 
 draft-editor-unavailable = 無法啟動本機編輯器，請先繼續使用 PTT 編輯器。
+
+draft-stop-requested = 已要求停止，不會重送；站端可能已有部分修改，請依畫面確認。本機草稿仍保留。
+
+editor-color-palette-hint = 方向鍵選色 · Tab 前往套用 · Esc 取消
+editor-color-working = 正在核對及上色，請稍候…
+editor-color-stop-requested = 已要求停止；已送出的色碼可能保留，請檢查站端畫面。
+
+slint-font-face-status = 已選用：英數 { $requested_ascii }／中文 { $requested_cjk }。繪圖 face：{ $ascii }／{ $cjk }；個別缺字仍可能使用替代字型。
+
+slint-menu-about = 關於 PTTStella
+slint-menu-services = 服務
+
+slint-article-heading = PTTStella  /  文章閱讀
+slint-execute = 執行
+slint-select-text = 選取文字
+slint-drag-scroll = 拖曳捲動
+slint-terminal-input = 終端輸入
+slint-article-input = 文章中的站端輸入
+slint-preview-image = 開啟完整圖片預覽
+slint-stop-requested = 停止中…
+slint-cancel-job = 取消工作
+slint-draft-color-hint = 選取後按右鍵上色
+slint-clear-selection = 清除選取
+slint-draft-position = { $row }:{ $column } · { $lines } 行
+slint-draft-busy = 草稿工作忙碌，請稍後再試
+slint-draft-choose = 選擇草稿，或從完整站端範本建立
+slint-draft-local = 本機編輯，不會自動送到站端
+slint-draft-worker-stopped = 草稿儲存工作已停止
+slint-draft-worker-unconfirmed = 草稿儲存工作未確認結束
+slint-draft-no-document = 沒有開啟草稿
+slint-draft-render-limit = 編輯區尺寸超過繪圖上限
+
+slint-sites-current = 目前連線：{ $target }
+slint-sites-field-size = 輸入超過 { $bytes } bytes 或含控制字元，保留前一個值。
+
+slint-profile-imported = 已載入顯示設定；有效變更會自動儲存。

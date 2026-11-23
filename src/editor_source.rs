@@ -5,7 +5,7 @@ use crate::{
     screen::Frame,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(any(test, feature = "desktop"))]
+#[cfg(any(test, feature = "desktop-services"))]
 #[doc(hidden)]
 pub mod fixture;
 

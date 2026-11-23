@@ -1,4 +1,45 @@
 fn main() -> std::io::Result<()> {
+    #[cfg(feature = "native-video")]
+    {
+        println!("cargo:rerun-if-env-changed=MPV_LIB_DIR");
+        let directory = if let Some(path) = std::env::var_os("MPV_LIB_DIR") {
+            std::path::PathBuf::from(path)
+        } else {
+            let host = std::env::var("HOST").map_err(|error| {
+                std::io::Error::other(format!("native-video requires Cargo HOST: {error}"))
+            })?;
+            let target = std::env::var("TARGET").map_err(|error| {
+                std::io::Error::other(format!("native-video requires Cargo TARGET: {error}"))
+            })?;
+            // pkg-config here describes the build machine. Never let a cross
+            // build silently select that machine's library search directory.
+            if host != target {
+                return Err(std::io::Error::other(format!(
+                    "Cross-compiling native-video ({host} -> {target}) requires MPV_LIB_DIR \
+                     for the target libmpv; host pkg-config is not used"
+                )));
+            }
+            let result = std::process::Command::new("pkg-config")
+                .args(["--variable=libdir", "mpv"])
+                .output()?;
+            if !result.status.success() {
+                return Err(std::io::Error::other(
+                    "native-video requires libmpv and pkg-config, or MPV_LIB_DIR",
+                ));
+            }
+            let value = String::from_utf8(result.stdout).map_err(std::io::Error::other)?;
+            std::path::PathBuf::from(value.trim())
+        };
+        if !directory.is_dir() {
+            return Err(std::io::Error::other(
+                "MPV library directory is unavailable",
+            ));
+        }
+        println!("cargo:rustc-link-search=native={}", directory.display());
+    }
+
+    #[cfg(feature = "slint-research")]
+    slint_build::compile("src/bin/slint_research/terminal.slint").map_err(std::io::Error::other)?;
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=PTTSTELLA_NOTICES_FILE");
     let notices = match std::env::var_os("PTTSTELLA_NOTICES_FILE") {

@@ -1,0 +1,434 @@
+//! Explicit bounded GPU checks against the owned 320x180 quadrant fixtures.
+//! Toolkit gestures prove the production adapter, separately from native input.
+use super::*;
+use crate::{
+    output::Output,
+    verification::{self, Verification, require, wait},
+};
+use glow::HasContext;
+use std::{error::Error, path::PathBuf, time::Duration};
+
+pub(super) fn capture_software(
+    frame: &pttstella::native_video::software::Frame,
+) -> serde_json::Value {
+    let [width, height] = frame.size();
+    let scale = (f64::from(width) / 320.).min(f64::from(height) / 180.);
+    let vw = 320. * scale;
+    let vh = 180. * scale;
+    let left = (f64::from(width) - vw) / 2.;
+    let top = (f64::from(height) - vh) / 2.;
+    let pixels: Vec<_> = [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
+        .into_iter()
+        .map(|(x, y)| {
+            let x = (left + vw * x) as usize;
+            let y = (top + vh * y) as usize;
+            let at = (y * width as usize + x) * 4;
+            frame.pixels()[at..at + 4].to_vec()
+        })
+        .collect();
+    let expected = [[255u8, 0, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255]];
+    let passed = pixels
+        .iter()
+        .zip(expected)
+        .all(|(a, b)| a[..3].iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 30));
+    serde_json::json!({"render_path":"software","size":[width,height],"frame_serial":frame.serial(),"pixels":pixels,"expected":expected,"passed":passed})
+}
+
+/// # Safety
+/// Called only after the production blit with the same live current GL context,
+/// with both framebuffers live.
+pub(super) unsafe fn capture(
+    gl: &glow::Context,
+    target: i32,
+    rect: [i32; 4],
+    height: i32,
+    surface: i32,
+    drew_video: bool,
+) -> serde_json::Value {
+    let expected = [[255u8, 0, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255]];
+    let [_, _, w, h] = rect;
+    // SAFETY: both buffers are live, the target rect is within the drawable,
+    // and the intermediate surface is exactly the size of the rect.
+    let (draw_buffer, pre_read_error, pack) = unsafe {
+        (
+            gl.get_parameter_i32(glow::DRAW_BUFFER0),
+            gl.get_error(),
+            [
+                glow::PIXEL_PACK_BUFFER_BINDING,
+                glow::PACK_ALIGNMENT,
+                glow::PACK_ROW_LENGTH,
+                glow::PACK_SKIP_PIXELS,
+                glow::PACK_SKIP_ROWS,
+            ]
+            .map(|field| gl.get_parameter_i32(field)),
+        )
+    };
+    if pack != [0, 4, 0, 0, 0] {
+        return serde_json::json!({
+            "render_path": "opengl",
+            "rect": rect,
+            "expected": expected,
+            "passed": false,
+            "drew_video": drew_video,
+            "draw_framebuffer": target,
+            "draw_buffer": draw_buffer,
+            "pre_read_error": pre_read_error,
+            "pack_state": pack,
+            "readback_error": "unexpected OpenGL pixel pack state",
+        });
+    }
+    // SAFETY: the checked pack state permits each four-byte client-memory read.
+    let (pixels, target_read_error, surface_pixels, surface_read_error) = unsafe {
+        let pixels = read_quadrants(gl, target, rect, height);
+        let target_read_error = gl.get_error();
+        let surface_pixels = read_quadrants(gl, surface, [0, 0, w, h], h);
+        let surface_read_error = gl.get_error();
+        (
+            pixels,
+            target_read_error,
+            surface_pixels,
+            surface_read_error,
+        )
+    };
+    let matches = |colors: &[[u8; 4]; 4]| {
+        colors
+            .iter()
+            .zip(expected)
+            .all(|(a, b)| a[..3].iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 30))
+    };
+    serde_json::json!({
+        "render_path": "opengl",
+        "rect": rect,
+        "pixels": pixels,
+        "expected": expected,
+        "passed": matches(&pixels),
+        "drew_video": drew_video,
+        "draw_framebuffer": target,
+        "draw_buffer": draw_buffer,
+        "pre_read_error": pre_read_error,
+        "target_read_error": target_read_error,
+        "surface_pixels": surface_pixels,
+        "surface_matches_expected": matches(&surface_pixels),
+        "surface_read_error": surface_read_error,
+    })
+}
+
+/// # Safety
+/// The current GL context must own the framebuffer, and the rectangle must fit
+/// the framebuffer. Client-memory pack state must fit each four-byte RGBA read.
+unsafe fn read_quadrants(
+    gl: &glow::Context,
+    target: i32,
+    rect: [i32; 4],
+    height: i32,
+) -> [[u8; 4]; 4] {
+    let [x, y, w, h] = rect;
+    let scale = (f64::from(w) / 320.).min(f64::from(h) / 180.);
+    let vw = 320. * scale;
+    let vh = 180. * scale;
+    let left = f64::from(x) + (f64::from(w) - vw) / 2.;
+    let bottom = f64::from(height - y - h) + (f64::from(h) - vh) / 2.;
+    let mut pixels = [[0u8; 4]; 4];
+    // SAFETY: rect is validated inside the drawable by the producer. PACK
+    // buffer is unbound and default state set. Each read writes four bytes.
+    unsafe {
+        gl.bind_framebuffer(
+            glow::READ_FRAMEBUFFER,
+            std::num::NonZeroU32::new(target as u32).map(glow::NativeFramebuffer),
+        );
+        let previous = gl.get_parameter_i32(glow::READ_BUFFER);
+        gl.read_buffer(if target == 0 {
+            glow::BACK
+        } else {
+            glow::COLOR_ATTACHMENT0
+        });
+        for (pixel, (fx, fy)) in
+            pixels
+                .iter_mut()
+                .zip([(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)])
+        {
+            gl.read_pixels(
+                (left + vw * fx) as i32,
+                (bottom + vh * (1. - fy)) as i32,
+                1,
+                1,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(pixel)),
+            );
+        }
+        gl.read_buffer(previous as u32);
+    }
+    pixels
+}
+pub fn start(
+    ui: &TerminalWindow,
+    media: Rc<Media>,
+    output: Rc<Output>,
+    directory: PathBuf,
+    _settings_path: PathBuf,
+) -> Result<Verification, Box<dyn Error>> {
+    Verification::start(
+        ui,
+        directory,
+        "native-video",
+        move |ui, directory| async move {
+            let checked = async {
+                let video = ready(&ui, &media, &output).await?;
+            let mut audio_controls_verified = false;
+            if std::env::var_os("PTTSTELLA_VIDEO_PROBE_FAIL_READY").is_some() {
+                return Err("deliberate video verifier failure after renderer setup".into());
+            }
+            play(&ui).await?;
+            if std::env::var_os("PTTSTELLA_VIDEO_STALL").is_some() {
+                wait(
+                    || ui.get_media_playing() && ui.get_media_status() == msg!("video-buffering"),
+                    "stalled video never became pausable",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-pause"), "loading control does not say pause")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || !ui.get_media_playing() && video.current.borrow().as_ref().is_some_and(|live| {
+                        live.session.status.lock().is_ok_and(|state| state.loading && state.paused)
+                    }),
+                    "pause while loading was not acknowledged",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-play"), "paused loading control does not say play")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || ui.get_media_playing(),
+                    "resume while loading was not acknowledged",
+                ).await?;
+            } else if std::env::var_os("PTTSTELLA_VIDEO_REJECT").is_some() {
+                wait(
+                    || ui.get_media_status() == msg!("video-unsupported"),
+                    "non-video payload was not rejected",
+                )
+                .await?;
+                require(!ui.get_media_playing(), "rejected payload is playing")?;
+            } else {
+                wait(
+                    || ui.get_media_playing() && ui.get_media_duration() > 2.9
+                        && video.current.borrow().as_ref().is_some_and(|live| {
+                            live.session.status.lock().is_ok_and(|state| state.loaded)
+                        }),
+                    "video did not load/play",
+                )
+                .await?;
+                ui.invoke_media_seek(1.);
+                let view = ui.get_media_video_bounds();
+                // The playback button starts the 34px row, separated from the
+                // video by the same 8px inset as the rest of the toolbar.
+                let play_button = slint::LogicalPosition::new(view.x + 17., view.y - 25.);
+                verification::click(&ui, play_button, slint::platform::PointerEventButton::Left);
+                wait(
+                    || !ui.get_media_playing() && (ui.get_media_position() - 1.).abs() < 0.1,
+                    "video seek/pause not acknowledged",
+                )
+                .await?;
+                for (volume, muted) in [(42, false), (42, true), (28, true), (28, false)] {
+                    ui.invoke_media_set_volume(f32::from(volume));
+                    ui.invoke_media_set_muted(muted);
+                    wait(
+                        || {
+                            ui.get_media_muted() == muted
+                                && ui.get_media_volume() == f32::from(volume)
+                                && video.current.borrow().as_ref().is_some_and(|live| {
+                                    live.session.status.lock().is_ok_and(|status| {
+                                        status.volume == volume && status.muted == muted
+                                    })
+                                })
+                        },
+                        "libmpv did not acknowledge volume and mute independently",
+                    )
+                    .await?;
+                }
+                audio_controls_verified = true;
+                if video.bridge.software.get() {
+                    verification::capture(&ui, &directory, "video-toolbar.png")?;
+                }
+                video.capture();
+                wait(
+                    || !video.bridge.samples.borrow().is_empty(),
+                    "GPU capture did not run",
+                )
+                .await?;
+                require(
+                    video
+                        .bridge
+                        .samples
+                        .borrow()
+                        .iter()
+                        .all(|s| s["passed"] == true),
+                    "main preview GPU pixels differ from fixture",
+                )?;
+                ui.invoke_media_action(2);
+                wait(
+                    || ui.get_media_playing() && ui.get_media_position() > 1.15,
+                    "resume did not advance",
+                )
+                .await?;
+                verification::foreground(&ui, false);
+                wait(|| !ui.get_media_playing(), "focus loss did not pause video").await?;
+                verification::foreground(&ui, true);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                require(
+                    !ui.get_media_playing(),
+                    "focus regain resumed without permission",
+                )?;
+                ui.invoke_media_seek(ui.get_media_duration() - 0.3);
+                ui.invoke_media_action(2);
+                wait(
+                    || !ui.get_media_playing() && video.current.borrow().as_ref().is_some_and(|live| {
+                        live.session.status.lock().is_ok_and(|state| state.eof)
+                    }),
+                    "playing to the end did not restore the play control",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-play"), "end of video control does not say play")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || ui.get_media_playing() && ui.get_media_position() < 0.8,
+                    "replay did not restart at the beginning",
+                ).await?;
+            }
+            media.close(true);
+            wait(
+                || video.current.borrow().is_none(),
+                "video close did not join session",
+            )
+            .await?;
+            require(
+                video.bridge.rendered.get().is_none() && video.bridge.offer.borrow().is_none(),
+                "video retained GPU/core references",
+            )?;
+            // Replacement during asynchronous startup must not leave a stale view.
+            ui.invoke_media_request(3);
+            ui.invoke_media_action(0);
+            ui.invoke_media_request(0);
+            wait(
+                || ui.get_media_open() && !ui.get_media_video() && ui.get_media_ready(),
+                "image did not replace cancelled video startup",
+            )
+            .await?;
+            wait(
+                || video.current.borrow().is_none(),
+                "cancelled startup survived image replacement",
+            )
+            .await?;
+            media.close(true);
+            Ok::<_, String>(serde_json::json!({"scope":"main Slint window; pixel source identified by render_path; synthetic toolkit controls; not OS input/audio audibility/performance","render_path":if video.bridge.software.get(){"software"}else{"opengl"},"passed":true,"audio_controls_verified":audio_controls_verified,"samples":&*video.bridge.samples.borrow(),"error":&*video.bridge.error.borrow(),"render_retired":video.bridge.rendered.get().is_none(),"session_joined":video.current.borrow().is_none()}))
+            }.await;
+            if let Err(error) = &checked {
+                let state = media.video.borrow().as_ref().map(|video| {
+                    let session = video.current.borrow().as_ref().map(|live| {
+                        let snapshot = live.session.updates().borrow().clone();
+                        serde_json::json!({"stage":format!("{:?}", snapshot.stage),
+                            "loading":snapshot.status.loading,"loaded":snapshot.status.loaded,
+                            "paused":snapshot.status.paused,
+                            "status":snapshot.status})
+                    });
+                    serde_json::json!({"session":session,"rendered":video.bridge.rendered.get(),
+                        "offer":video.bridge.offer.borrow().is_some(),
+                        "renderer_error":video.bridge.error.borrow().is_some(),
+                        "renderer_error_detail":&*video.bridge.error.borrow(),
+                        "samples":&*video.bridge.samples.borrow()})
+                });
+                let audit = serde_json::json!({"status":"failed","error":error,
+                    "render_path":if media.video.borrow().as_ref().is_some_and(|v|v.bridge.software.get()){"software"}else{"opengl"},
+                    "foreground":ui.get_native_foreground(),"play_allowed":ui.get_media_play_allowed(),
+                    "ready":ui.get_media_ready(),"position":ui.get_media_position(),
+                    "duration":ui.get_media_duration(),"video":state});
+                let saved = serde_json::to_vec_pretty(&audit)
+                    .map_err(|e| e.to_string())
+                    .and_then(|bytes| {
+                        std::fs::write(directory.join("failure-state.json"), bytes)
+                            .map_err(|e| e.to_string())
+                    });
+                if let Err(error) = saved {
+                    eprintln!("video failure audit: {error}");
+                }
+            }
+            // Retire the GL owner while Slint can still render, on every exit.
+            // Keep the original assertion error even when cleanup also fails.
+            let cleanup = media.shutdown().await;
+            let summary = match (checked, cleanup) {
+                (Ok(summary), Ok(())) => summary,
+                (Err(error), Ok(())) | (Ok(_), Err(error)) => return Err(error),
+                (Err(error), Err(cleanup)) => {
+                    return Err(format!("{error}; media shutdown: {cleanup}"));
+                }
+            };
+            std::fs::write(
+                directory.join("video.json"),
+                serde_json::to_vec_pretty(&summary).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())
+        },
+    )
+}
+
+/// Shared explicit toolkit setup for content and lifetime probes.
+pub(super) async fn ready(
+    ui: &TerminalWindow,
+    media: &Media,
+    output: &Output,
+) -> Result<Rc<Video>, String> {
+    if std::env::var_os("PTTSTELLA_VIDEO_PROBE_NATIVE_WAIT").is_some() {
+        let mut active = false;
+        for _ in 0..6_000 {
+            if ui.get_native_foreground() {
+                active = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        require(
+            active,
+            "native video probe did not receive foreground activation",
+        )?;
+    }
+    wait(
+        || {
+            verification::foreground(ui, true);
+            output.current(ui).is_some()
+        },
+        "video input never ready",
+    )
+    .await?;
+    let video = media
+        .video
+        .borrow()
+        .clone()
+        .ok_or("native video owner missing")?;
+    ui.invoke_media_request(3);
+    wait(
+        || ui.get_media_video() && ui.get_media_ready(),
+        "video did not become ready without playback",
+    )
+    .await?;
+    require(
+        !ui.get_media_playing() && ui.get_media_duration() == 0.,
+        "video autoloaded",
+    )?;
+    Ok(video)
+}
+
+pub(super) async fn play(ui: &TerminalWindow) -> Result<(), String> {
+    // The diagnostic window never claims native focus at launch.
+    // Explicitly activate this toolkit gesture, then give the same
+    // production permit binding one UI turn before pressing Play.
+    // Match other full-App probes: let initial Focused/Occluded
+    // notifications settle before this explicit foreground gesture.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let activated = std::cell::Cell::new(false);
+    wait(
+        || {
+            verification::foreground(ui, true);
+            activated.replace(true) && ui.get_media_play_allowed()
+        },
+        "video toolkit Play was not admitted",
+    )
+    .await?;
+    ui.invoke_media_action(2);
+    Ok(())
+}

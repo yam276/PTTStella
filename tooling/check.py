@@ -252,14 +252,14 @@ def run_desktop(root, executable=None, artifacts=None):
         commands = (['fmt', '--all', '--', '--check'],
                           ['clippy', '--features', 'desktop', '--all-targets', '--locked', '--', '-D', 'warnings'],
                           ['test', '--locked', '--features', 'desktop', '--lib'],
-                          ['build', '--locked', '--features', 'desktop', '--bin', 'pttstella'])
+                          ['build', '--locked', '--features', 'desktop', '--bin', 'pttstella-dioxus'])
         if executable is not None:
             executable = Path(executable).resolve()
             if not executable.is_file():
                 raise CheckFailure('Requested desktop executable is missing')
             commands = ()  # Verify this exact packaged executable; do not rebuild it.
         else:
-            executable = root / 'target/debug/pttstella.exe'
+            executable = root / 'target/debug/pttstella-dioxus.exe'
         for arguments in commands:
             result = subprocess.run(['cargo', '+' + channel, *arguments], cwd=root, capture_output=True,
                                     text=True, encoding='utf-8', errors='replace', timeout=300)

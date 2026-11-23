@@ -8,6 +8,16 @@ use pttstella::{
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+impl From<pttstella::surface_state::ReadingMove> for Packet<'static> {
+    fn from(value: pttstella::surface_state::ReadingMove) -> Self {
+        Self::ReadingMove {
+            generation: value.generation,
+            article: value.article,
+            intent: value.intent,
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
@@ -15,6 +25,7 @@ pub(super) enum Packet<'a> {
     Diagnostics(bool),
     UpdateStatus(pttstella::updates::Status),
     ArticleUpdates(Option<super::article_updates::Status>),
+    ArticleFind(pttstella::article_find::Reply<'a>),
     SitesOpen {
         request: u64,
         data: super::sites::Snapshot,
@@ -145,11 +156,7 @@ pub(super) enum ToastKind {
     Success,
 }
 
-#[derive(Serialize)]
-pub(super) struct RecentBoardsPacket {
-    pub boards: Vec<pttstella::board_navigation::BoardName>,
-    pub notice: Option<String>,
-}
+pub(super) use pttstella::recent_boards::session::Snapshot as RecentBoardsPacket;
 
 #[derive(Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]

@@ -23,9 +23,15 @@ def publish_files(paths, output):
     return created
 
 
-def build(target=None, env=None):
-    command = ['cargo', 'build', '--locked', '--release', '--features', 'desktop',
-               '--bin', 'pttstella', '--message-format=json-render-diagnostics']
+# The release entry is the Slint frontend with native video. The Dioxus
+# rollback packagers pass features='desktop', binary='pttstella-dioxus'.
+SLINT_FEATURES = 'native-player-probe'
+
+
+def build(target=None, env=None, *, features=SLINT_FEATURES, binary='pttstella', build_outputs=None):
+    """Build one release binary; optionally record each build script's OUT_DIR by package name."""
+    command = ['cargo', 'build', '--locked', '--release', '--features', features,
+               '--bin', binary, '--message-format=json-render-diagnostics']
     if target:
         command += ['--target', target]
     executable = None
@@ -34,8 +40,15 @@ def build(target=None, env=None):
         try:
             for line in child.stdout:
                 message = json.loads(line)
+                if (build_outputs is not None and message.get('reason') == 'build-script-executed'
+                        and message.get('out_dir')):
+                    package_id = message.get('package_id', '')
+                    # `registry+...#name@version`, or the older `name version (source)`.
+                    name = (package_id.split(' ', 1)[0] if ' ' in package_id
+                            else package_id.split('#')[-1].split('@')[0].rsplit('/', 1)[-1])
+                    build_outputs.setdefault(name, []).append(Path(message['out_dir']))
                 if (message.get('reason') == 'compiler-artifact'
-                        and message.get('target', {}).get('name') == 'pttstella'
+                        and message.get('target', {}).get('name') == binary
                         and 'bin' in message.get('target', {}).get('kind', [])
                         and message.get('executable')):
                     executable = Path(message['executable'])
@@ -47,33 +60,54 @@ def build(target=None, env=None):
                 child.wait()
             raise
     if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report the pttstella executable')
+        raise RuntimeError('Cargo did not report the '+binary+' executable')
     return executable
 
 
-def copy_licenses(destination, target):
+def copy_licenses(destination, target, *, feature="desktop"):
     destination.mkdir()
     for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
         shutil.copy2(ROOT/'assets/fonts'/name, destination/name)
-    shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
-    shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
+    if feature == 'desktop':
+        shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
+        shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
+    else:
+        shutil.copy2(ROOT/'assets/icons/lucide/LICENSE.txt', destination/'Lucide-Feather.txt')
     result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
-                             '--filter-platform', target, '--features', 'desktop'],
+                             '--filter-platform', target, '--features', feature],
                             cwd=ROOT, capture_output=True, check=True, encoding='utf-8')
     inventory = []
     for package in json.loads(result.stdout)['packages']:
-        if not package.get('source'):
-            continue
         source = Path(package['manifest_path']).parent
+        if (not package.get('source')
+                and Path(package['manifest_path']).resolve() == (ROOT/'Cargo.toml').resolve()):
+            continue
         label = package['name']+'-'+package['version']
         files = {p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*')
                  for p in source.glob(pattern) if p.is_file()}
+        files.update(p for p in (source/'LICENSES').glob('*') if p.is_file())
         if package.get('license_file'):
             files.add(source/package['license_file'])
         for file in sorted(files):
-            (destination/label).mkdir(exist_ok=True)
-            shutil.copy2(file, destination/label/file.name)
-        inventory.append({key: package.get(key) for key in
-                          ('name', 'version', 'license', 'repository', 'source')})
+            package_notices = destination/label
+            if file.parent == source/'LICENSES':
+                package_notices /= 'LICENSES'
+            package_notices.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(file, package_notices/file.name)
+        entry = {key: package.get(key) for key in
+                 ('name', 'version', 'license', 'repository', 'source')}
+        if not package.get('source'):
+            try:
+                entry['local_path'] = source.resolve().relative_to(ROOT.resolve()).as_posix()
+            except ValueError:
+                entry['local_path'] = None
+            # Keep local patch attribution alongside the upstream licenses.
+            for name in ('PTTSTELLA-UPSTREAM.json', 'PTTSTELLA-PATCH.md'):
+                notice = source/name
+                if notice.is_file():
+                    package_notices = destination/label
+                    package_notices.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(notice, package_notices/name)
+        inventory.append(entry)
     (destination/'rust-dependencies.json').write_text(
         json.dumps(inventory, indent=2)+'\n', encoding='utf-8')

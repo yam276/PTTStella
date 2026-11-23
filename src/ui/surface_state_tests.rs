@@ -1,4 +1,12 @@
 use super::*;
+use pttstella::{
+    connection::{Phase, View},
+    filters,
+    media::hover::Lease,
+    navigation::Stamp,
+    selection,
+    settings::{ArticleMode, DisplaySettings},
+};
 use pttstella::{screen::Screen, selection::Selection};
 
 fn view() -> View {
@@ -39,7 +47,7 @@ fn expected_merged_fixture(view: &View) -> pttstella::screen::Frame {
         .iter_mut()
         .filter(|g| g.row == 6 && (3..8).contains(&g.col))
     {
-        glyph.text = "█".into();
+        glyph.text = " ".into();
         glyph.left = pttstella::screen::Style {
             fg: 0,
             ..Default::default()
@@ -213,6 +221,93 @@ fn displayed(state: &mut SurfaceState, view: &View) -> Identity {
     );
     state.acknowledge(identity).unwrap();
     identity
+}
+#[test]
+fn finding_requires_current_ack_epoch_and_filtered_cells_and_releases_on_foreign_scope() {
+    use pttstella::article_find::Action;
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&pttstella::replay::native_article_find_page().unwrap());
+    view.frame = screen.frame();
+    let rules = filters::Rules::default()
+        .edit_policy("Blocked", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let mut state = SurfaceState::new(rules);
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(!state.find_action(pending, view.stamp(), 1, Action::Open, &view));
+    state.acknowledge(pending).unwrap();
+    assert!(state.find_action(pending, view.stamp(), 2, Action::Open, &view));
+    assert!(state.find_action(
+        pending,
+        view.stamp(),
+        3,
+        Action::Edit {
+            query: "中".into()
+        },
+        &view
+    ));
+    assert_eq!(state.find().reply(0).total, 3);
+    let original = state.last_displayed().unwrap().frame.clone();
+    let mut stale = view.stamp();
+    stale.input_epoch += 1;
+    assert!(!state.find_action(
+        pending,
+        stale,
+        4,
+        Action::Edit {
+            query: "hidden".into()
+        },
+        &view
+    ));
+    let old_stamp = view.stamp();
+    view.input_pending = true;
+    state.update(&view);
+    assert_eq!(state.find().reply(0).total, 0);
+    assert!(!state.find_action(
+        pending,
+        view.stamp(),
+        5,
+        Action::Step { back: false },
+        &view
+    ));
+    view.input_pending = false;
+    view.input_epoch += 1;
+    state.update(&view);
+    let fresh = displayed(&mut state, &view);
+    state.find_sync(&view);
+    assert_eq!(state.find().reply(0).total, 3);
+    assert_eq!(state.last_displayed().unwrap().frame, original);
+    assert!(!state.find_action(pending, old_stamp, 6, Action::Step { back: false }, &view));
+    assert!(state.find_action(fresh, view.stamp(), 7, Action::Step { back: false }, &view));
+    view.phase = Phase::Disconnected;
+    state.update(&view);
+    assert!(!state.find().opened());
+    assert_eq!(state.find().indexed_rows(), 0);
+    assert!(!state.find_action(fresh, view.stamp(), 8, Action::Open, &view));
+    view.phase = Phase::Connected;
+    state.update(&view);
+    let fresh = displayed(&mut state, &view);
+    assert!(state.find_action(fresh, view.stamp(), 9, Action::Open, &view));
+    assert!(state.find_action(
+        fresh,
+        view.stamp(),
+        10,
+        Action::Edit {
+            query: "中".into()
+        },
+        &view
+    ));
+    view.generation += 1;
+    state.update(&view);
+    assert!(!state.find().opened());
+    displayed(&mut state, &view);
+    state.find_sync(&view);
+    assert!(!state.find().opened());
+    assert_eq!(state.find().indexed_rows(), 0);
 }
 #[test]
 fn editor_colouring_consumes_only_the_acknowledged_rust_selection() {
@@ -901,6 +996,21 @@ fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
         serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
     let mut screen = Screen::new(80, 24).unwrap();
     state.article_input(&view, b"\x1b[6~");
+    // The first chunk of an encoded page can be unrecognizable while the
+    // cache still owns its page turn. It must not retire the focused account.
+    view.frame.revision += 50;
+    view.frame.glyphs[0].unmapped = true;
+    view.input_epoch += 1;
+    assert!(matches!(
+        view.context(),
+        pttstella::navigation::Context::Unknown { .. }
+    ));
+    state.update(&view);
+    let intermediate = displayed(&mut state, &view);
+    let partial = state.current(intermediate, &view).unwrap();
+    assert_eq!(partial.article.as_ref().unwrap().id, article);
+    assert_eq!(partial.reply_focus.as_deref(), Some("Alice"));
+    assert_eq!(intermediate.presentation, focused.presentation);
     screen.feed(
         &pttstella::encoding::encode(
             &fixture["reading"]
@@ -1112,7 +1222,12 @@ fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id + 1, false, &view));
     assert!(state.full_load_action(view.generation, id, false, &view));
-    assert!(state.full_load_deadline().is_none());
+    let outstanding = state.full_load_deadline();
+    assert!(outstanding.is_some());
+    assert!(state.full_load_action(view.generation, id, true, &view));
+    assert!(state.next_full_page(&view).is_none());
+    assert_eq!(state.full_load_deadline(), outstanding);
+    assert!(state.full_load_action(view.generation, id, false, &view));
     let current = displayed(&mut state, &view);
     assert_eq!(
         state
@@ -1127,8 +1242,9 @@ fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_
     assert!(state.next_full_page(&view).is_none());
     assert!(state.set_article_mode(ArticleMode::Terminal));
     displayed(&mut state, &view);
-    assert!(state.displayed.as_ref().unwrap().article.is_none());
+    assert!(state.last_displayed().unwrap().article.is_none());
     assert!(!state.full_load_active());
+    assert!(state.full_load_deadline().is_none());
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id, true, &view));
 }
@@ -1590,14 +1706,7 @@ fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_
     state.update(&view);
     assert!(state.queue(&view, false, &Default::default()).is_none());
     assert_eq!(
-        state
-            .displayed
-            .as_ref()
-            .unwrap()
-            .article
-            .as_ref()
-            .unwrap()
-            .id,
+        state.last_displayed().unwrap().article.as_ref().unwrap().id,
         id
     );
     source.feed(
@@ -1638,8 +1747,12 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         "foreign_done",
         "generation",
         "raw",
+        "rules",
+        "terminal",
     ] {
         let (mut state, mut view, mut source) = refresh_fixture();
+        let frozen = Identity::of(state.last_displayed().unwrap());
+        assert!(state.retained_reading_identity(&view).is_none());
         let before = state.reading_progress();
         let id = before.unwrap().0;
         assert!(state.updates_action(7, id, true));
@@ -1661,6 +1774,27 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         view.frame = source.frame();
         view.input_epoch += 1;
         state.update(&view);
+        assert_eq!(state.retained_reading_identity(&view), Some(frozen));
+        let mut owned_input = view.clone();
+        owned_input.mouse.policy_epoch += 1;
+        assert_eq!(state.retained_reading_identity(&owned_input), Some(frozen));
+        assert!(state.current(frozen, &view).is_none());
+        // Fresh policy/session changes revoke frozen metadata even before the
+        // reducer observes them. No old index can escape into another scope.
+        for change in ["generation", "disconnect", "route", "login"] {
+            let mut fresh = view.clone();
+            match change {
+                "generation" => fresh.generation += 1,
+                "disconnect" => fresh.phase = Phase::Disconnected,
+                "route" => fresh.mouse.route = pttstella::mouse::input::Route::Station,
+                "login" => fresh.login_pending = true,
+                _ => unreachable!(),
+            }
+            assert!(
+                state.retained_reading_identity(&fresh).is_none(),
+                "{change}"
+            );
+        }
         match action {
             "cancel" => assert!(state.updates_action(7, id, false)),
             "background" => state.pause_updates(),
@@ -1680,13 +1814,19 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
             }
             "generation" => view.generation += 1,
             "raw" => state.article_input(&view, b"Q"),
+            "rules" => state.replace_rules(state.rules().clone()),
+            "terminal" => {
+                state.set_article_mode(ArticleMode::Terminal);
+            }
             _ => unreachable!(),
         }
         state.update(&view);
-        if ["generation", "raw"].contains(&action) {
+        if ["generation", "raw", "rules", "terminal"].contains(&action) {
             assert!(state.reading_progress().is_none());
+            assert!(state.retained_reading_identity(&view).is_none());
             continue;
         }
+        assert_eq!(state.retained_reading_identity(&view), Some(frozen));
         assert_eq!(state.reading_progress(), before, "{action}");
         assert!(
             !state.navigation_shown(operation),
@@ -1729,6 +1869,7 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         assert!(!state.restore_station(8, id));
         assert!(!state.restore_station(7, id + 1));
         assert!(state.restore_station(7, id));
+        assert!(state.retained_reading_identity(&view).is_none());
         state.update(&view);
         assert!(state.reading_progress().is_none());
         let actual = displayed(&mut state, &view);
@@ -1977,4 +2118,52 @@ fn reply_roles_do_not_change_filtered_frames_export_or_merged_ids_and_reset_with
                 .is_empty()
         );
     }
+}
+
+#[test]
+fn native_row_windows_use_the_final_merged_projection_and_reject_old_policy() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut v = view();
+    let identity = displayed(&mut state, &v);
+    let source = state
+        .article_source(&v, &DisplaySettings::default())
+        .unwrap();
+    let tile = state.article_window(&source, 6..7).unwrap();
+    let expected = expected_merged_fixture(&v);
+    assert_eq!(
+        selection::extract(&tile.paint.frame, &Selection::Line { row: 0 })
+            .unwrap()
+            .text,
+        selection::extract(&expected, &Selection::Line { row: 6 })
+            .unwrap()
+            .text
+    );
+    assert_eq!(
+        tile.body_rows,
+        state.current(identity, &v).unwrap().frame.rows - 1
+    );
+    assert!(
+        tile.paint
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 0 && (3..8).contains(&g.col))
+            .all(|g| g.text == " ")
+    );
+    state.replace_rules(filters::Rules::default().edit("Alice", "", false).unwrap());
+    assert!(state.article_window(&source, 6..7).is_none());
+    displayed(&mut state, &v);
+    let masked = state
+        .article_source(&v, &DisplaySettings::default())
+        .unwrap();
+    let tile = state.article_window(&masked, 6..7).unwrap();
+    assert!(
+        !selection::extract(&tile.paint.frame, &Selection::Line { row: 0 })
+            .unwrap()
+            .text
+            .contains("ALICE")
+    );
+    v.generation += 1;
+    state.update(&v);
+    assert!(state.article_window(&masked, 6..7).is_none());
 }

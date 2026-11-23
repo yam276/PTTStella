@@ -1,0 +1,518 @@
+import { ListView, ScrollView, Slider } from "std-widgets.slint";
+
+export global PanelTheme {
+    out property <color> surface: #0c1c30;
+    out property <color> input: #091727;
+    out property <color> control: #132c45;
+    out property <color> hover: #203b55;
+    out property <color> border: #34475b;
+    out property <color> text: #ebe7dc;
+    out property <color> muted: #b5bcc7;
+    out property <color> gold: #e7c46a;
+    out property <color> gold-border: #786640;
+    out property <color> disabled: #808b99;
+}
+
+export global PanelEdit {
+    in-out property <int> code;
+    in-out property <int> sequence;
+    public function apply(value: int) { root.code = value; root.sequence += 1; }
+}
+
+export component PanelButton inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <length> icon-size: 18px;
+    in property <bool> icon-only;
+    in property <bool> hover-when-disabled;
+    in property <length> font-size: 13px;
+    in property <color> label-color: !root.enabled ? PanelTheme.disabled : root.flat ? PanelTheme.text : root.navigation && !root.checked ? PanelTheme.muted : PanelTheme.gold;
+    in property <color> icon-color: !root.enabled ? PanelTheme.disabled : PanelTheme.gold;
+    in property <bool> checkbox;
+    in property <bool> selectable;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    in property <bool> navigation;
+    in property <bool> flat;
+    in property <bool> primary;
+    out property <bool> has-focus: keys.has-focus;
+    out property <bool> hovered: touch.has-hover;
+    callback clicked;
+    forward-focus: keys;
+    min-height: 34px;
+    max-height: root.navigation ? 40px : 36px;
+    preferred-height: 34px;
+    vertical-stretch: 0;
+    horizontal-stretch: 0;
+    min-width: 0px;
+    private property <length> inset: root.flat ? 2px : root.navigation ? 16px : 10px;
+    private property <length> checkbox-width: root.checkbox ? 20px : 0px;
+    private property <length> icon-width: root.icon.width > 0 ? root.icon-size + 8px : 0px;
+    preferred-width: root.icon-only ? 34px : label.preferred-width + root.checkbox-width + root.icon-width + 22px;
+    background: root.flat ? (root.enabled && touch.has-hover ? PanelTheme.hover : transparent)
+        : root.checked ? PanelTheme.hover : root.navigation && !touch.has-hover ? transparent
+        : root.enabled && touch.has-hover ? PanelTheme.hover : PanelTheme.control;
+    border-width: (root.navigation || root.flat) && !root.has-focus ? 0px : 1px;
+    border-color: root.enabled && (root.has-focus || touch.has-hover || root.primary) ? PanelTheme.gold : PanelTheme.border;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checkable: root.selectable || root.checkbox;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+
+    if root.navigation && root.checked && !root.flat: Rectangle {
+        x: 0; y: 0; width: 3px; height: parent.height; background: PanelTheme.gold;
+    }
+    if root.checkbox: Rectangle {
+        x: root.inset; y: (parent.height - self.height) / 2;
+        width: 12px; height: 12px; border-radius: 2px;
+        border-width: 1px; border-color: #8e98a4;
+        background: root.checked ? #bba05d : PanelTheme.control;
+        if root.checked: Image {
+            width: 10px; height: 10px;
+            source: @image-url("../../../assets/icons/lucide/check.svg");
+        }
+    }
+    if root.icon-width > 0px: Image {
+        x: root.icon-only ? (parent.width - self.width) / 2 : root.inset + root.checkbox-width;
+        y: (parent.height - self.height) / 2;
+        width: root.icon-size; height: root.icon-size;
+        source: root.icon;
+        colorize: root.icon-color;
+        accessible-role: none;
+    }
+    label := Text {
+        visible: !root.icon-only;
+        x: root.inset + root.checkbox-width + root.icon-width;
+        width: parent.width - self.x - 10px;
+        text: root.text; font-size: root.font-size;
+        color: root.label-color;
+        vertical-alignment: center;
+        horizontal-alignment: root.navigation || root.icon-width > 0px ? left : center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        enabled: root.enabled || root.hover-when-disabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { if root.enabled { keys.focus(); root.clicked(); } }
+    }
+    keys := FocusScope {
+        enabled: root.enabled;
+        // Let the TouchArea receive the press and assign focus on activation.
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                if (!event.repeat) { root.clicked(); }
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+export component PanelCheck inherits PanelButton {
+    callback toggled;
+    in property <string> caption;
+    text: root.caption;
+    checkbox: true;
+    accessible-role: checkbox;
+    navigation: true;
+    clicked => { root.checked = !root.checked; root.toggled(); }
+}
+
+export component PanelField inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <string> placeholder-text;
+    in-out property <string> text <=> input.text;
+    out property <bool> has-focus: input.has-focus;
+    private property <int> edit-sequence: PanelEdit.sequence;
+    changed edit-sequence => { if root.has-focus { root.edit-key(PanelEdit.code); } }
+    in property <InputType> input-type <=> input.input-type;
+    in property <InputMethodHints> input-method-hints <=> input.input-method-hints;
+    callback edited(string);
+    callback accepted();
+    callback key-pressed(event: KeyEvent) -> EventResult;
+    key-pressed(event) => { return reject; }
+    forward-focus: input;
+    min-height: 34px;
+    max-height: 36px;
+    vertical-stretch: 0;
+    min-width: 100px;
+    background: PanelTheme.input;
+    border-width: 1px;
+    border-color: root.has-focus ? PanelTheme.gold : PanelTheme.border;
+    accessible-role: text-input;
+    accessible-enabled: root.enabled;
+    accessible-value: root.input-type == InputType.password ? "" : root.text;
+    accessible-placeholder-text: root.placeholder-text;
+    accessible-action-set-value(value) => { if (root.enabled) { input.text = value; root.edited(value); } }
+    Text {
+        x: 10px; width: parent.width - 20px;
+        text: root.placeholder-text; visible: root.text == "";
+        color: PanelTheme.muted; font-size: 13px; vertical-alignment: center; overflow: elide;
+    }
+    input := TextInput {
+        x: 10px; width: parent.width - 20px;
+        enabled: root.enabled; single-line: true; font-size: 13px;
+        color: PanelTheme.text; selection-background-color: PanelTheme.gold; selection-foreground-color: #102139;
+        vertical-alignment: center;
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(); }
+        key-pressed(event) => { return root.key-pressed(event); }
+    }
+    public function select-all() { input.select-all(); }
+    public function copy() { input.copy(); }
+    public function cut() { input.cut(); }
+    public function paste() { input.paste(); }
+    public function undo() { input.undo(); }
+    public function redo() { input.redo(); }
+    public function edit-key(code: int) {
+        if code == 0 { input.select-all(); } else if code == 1 { input.copy(); }
+        else if code == 2 { input.cut(); } else if code == 3 { input.paste(); }
+        else if code == 4 { input.undo(); } else if code == 5 { input.redo(); }
+    }
+}
+
+export component PanelSlider inherits Rectangle {
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in property <float> step: 1;
+    in property <bool> enabled: true;
+    in property <string> label;
+    in-out property <float> value <=> slider.value;
+    out property <bool> has-focus: slider.has-focus;
+    callback changed(float);
+    callback released(float);
+    forward-focus: slider;
+    min-height: 24px;
+    min-width: 48px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    private property <float> fraction: clamp((root.value - root.minimum) / max(0.01, root.maximum - root.minimum), 0, 1);
+
+    rail := Rectangle {
+        x: 8px; width: parent.width - 16px; height: 4px;
+        border-radius: 2px; background: PanelTheme.border;
+        Rectangle {
+            x: 0px; width: parent.width * root.fraction; height: parent.height;
+            border-radius: 2px; background: root.enabled ? PanelTheme.gold : PanelTheme.disabled;
+        }
+    }
+    Rectangle {
+        x: (parent.width - self.width) * root.fraction;
+        width: 16px; height: 16px; border-radius: 8px;
+        background: root.enabled ? PanelTheme.gold : PanelTheme.disabled;
+        border-width: root.has-focus ? 2px : 1px;
+        border-color: root.has-focus ? PanelTheme.text : PanelTheme.gold-border;
+    }
+    // Keep the toolkit's drag, keyboard and accessibility input.
+    slider := Slider {
+        width: parent.width; height: parent.height;
+        opacity: 0;
+        minimum: root.minimum; maximum: root.maximum;
+        step: root.step; enabled: root.enabled;
+        changed(value) => { root.changed(value); }
+        released(value) => { root.released(value); }
+        accessible-label: root.label;
+        accessible-action-set-value(value) => {
+            if root.enabled && value.is-float() { root.set-from-accessibility(value.to-float()); }
+        }
+        accessible-action-increment => { if root.enabled { root.set-from-accessibility(root.value + root.step); } }
+        accessible-action-decrement => { if root.enabled { root.set-from-accessibility(root.value - root.step); } }
+    }
+    function set-from-accessibility(value: float) {
+        let next = clamp(value, root.minimum, root.maximum);
+        if next != root.value {
+            root.value = next;
+            root.changed(next);
+        }
+        root.released(next);
+    }
+}
+
+export component PanelScrollBar inherits Rectangle {
+    in property <length> content-height;
+    in-out property <length> content-y;
+    private property <length> extent: max(0px, root.content-height - root.height);
+    private property <length> thumb-height: min(root.height, max(20px, root.height * root.height / max(1px, root.content-height)));
+    private property <length> travel: root.height - root.thumb-height;
+    width: 10px;
+    visible: root.extent > 0px && root.travel > 0px;
+    background: PanelTheme.input;
+    thumb := Rectangle {
+        width: 6px; height: root.thumb-height;
+        y: root.travel * clamp(-root.content-y / max(1px, root.extent), 0, 1);
+        border-radius: 3px;
+        background: pointer.has-hover || pointer.pressed ? PanelTheme.gold : PanelTheme.gold-border;
+    }
+    pointer := TouchArea {
+        private property <length> grab;
+        function move-thumb() {
+            root.content-y = -root.extent * clamp((self.mouse-y - self.grab) / max(1px, root.travel), 0, 1);
+        }
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                self.grab = self.mouse-y >= thumb.y && self.mouse-y <= thumb.y + thumb.height
+                    ? self.mouse-y - thumb.y : thumb.height / 2;
+                self.move-thumb();
+            }
+        }
+        moved => { if self.pressed { self.move-thumb(); } }
+        scroll-event(event) => {
+            if event.delta-y == 0px { return reject; }
+            root.content-y = clamp(root.content-y + event.delta-y, -root.extent, 0px);
+            return accept;
+        }
+    }
+}
+
+export component PanelScrollView inherits Rectangle {
+    out property <length> visible-width: scroll.visible-width;
+    out property <length> visible-height: scroll.visible-height;
+    in-out property <length> content-width <=> scroll.content-width;
+    in-out property <length> content-height <=> scroll.content-height;
+    in-out property <length> content-y <=> scroll.content-y;
+    min-width: scroll.min-width;
+    min-height: scroll.min-height;
+    preferred-width: scroll.preferred-width;
+    preferred-height: scroll.preferred-height;
+    horizontal-stretch: 1; vertical-stretch: 1;
+    scroll := ScrollView {
+        x: 0px; width: parent.width - bar.width; height: parent.height;
+        vertical-scrollbar-policy: always-off;
+        @children
+    }
+    bar := PanelScrollBar { x: parent.width - self.width; content-height: scroll.content-height; content-y <=> scroll.content-y; }
+}
+
+export component PanelReadOnlyText inherits Rectangle {
+    in property <string> text;
+    in property <string> label;
+    vertical-stretch: 1;
+    background: PanelTheme.input;
+    border-width: 1px;
+    border-color: input.has-focus ? PanelTheme.gold : PanelTheme.border;
+    forward-focus: input;
+
+    ContextMenuArea {
+        Menu {
+            MenuItem { title: @tr("Copy"); activated => { input.copy(); } }
+            MenuItem { title: @tr("Select All"); activated => { input.select-all(); } }
+        }
+        scroll := PanelScrollView {
+            x: 10px; y: 8px; width: parent.width - 20px; height: parent.height - 16px;
+            content-width: self.visible-width;
+            content-height: max(self.visible-height, input.preferred-height + 4px);
+            input := TextInput {
+                x: 2px; y: 2px;
+                width: parent.width - 4px; height: parent.height - 4px;
+                text: root.text;
+                font-size: 14px;
+                accessible-label: root.label;
+                read-only: true;
+                single-line: false;
+                wrap: word-wrap;
+                color: PanelTheme.text;
+                selection-background-color: PanelTheme.gold;
+                selection-foreground-color: PanelTheme.input;
+                page-height: scroll.visible-height;
+                cursor-position-changed(position) => {
+                    let visible-y = position.y + scroll.content-y;
+                    if visible-y < 0px {
+                        scroll.content-y = -position.y;
+                    } else if visible-y > scroll.visible-height {
+                        scroll.content-y = scroll.visible-height - position.y;
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component PanelCombo inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: -1;
+    in property <int> displayed-index: root.current-index;
+    in property <string> placeholder-text;
+    in property <bool> enabled: true;
+    private property <bool> available: root.enabled && root.model.length > 0;
+    private property <length> row-height: 32px;
+    private property <int> highlight: -1;
+    private property <string> value: root.displayed-index >= 0 && root.displayed-index < root.model.length
+        ? root.model[root.displayed-index] : root.placeholder-text;
+    out property <bool> has-focus: trigger.has-focus || menu.is-open;
+    callback selected(string);
+    forward-focus: trigger;
+    min-height: 34px;
+    max-height: 36px;
+    vertical-stretch: 0;
+    min-width: 120px;
+    background: pointer.has-hover && root.available ? PanelTheme.hover : #142b41;
+    border-width: 1px;
+    border-color: root.has-focus ? PanelTheme.gold : PanelTheme.border;
+    accessible-role: combobox;
+    accessible-enabled: root.available;
+    accessible-value: root.value;
+    accessible-expandable: true;
+    accessible-expanded: menu.is-open;
+    accessible-action-default => { root.toggle-menu(); }
+    changed available => { if !root.available && menu.is-open { menu.close(); } }
+    changed model => { if menu.is-open { menu.close(); } }
+
+    function toggle-menu() {
+        if menu.is-open {
+            menu.close();
+        } else if root.available {
+            trigger.focus();
+            root.highlight = max(0, root.displayed-index);
+            menu.show();
+        }
+    }
+    function choose(index: int) {
+        if index >= 0 && index < root.model.length {
+            let value = root.model[index];
+            menu.close();
+            root.current-index = index;
+            root.selected(value);
+        }
+    }
+    Text {
+        x: 10px; width: parent.width - 40px;
+        text: root.value; color: root.available ? PanelTheme.text : #9eabb9;
+        font-size: 14px; vertical-alignment: center; overflow: elide;
+    }
+    Text {
+        x: parent.width - 26px; width: 18px;
+        text: "▾"; color: PanelTheme.muted; font-size: 12px;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+    trigger := FocusScope {
+        enabled: root.available;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " || event.text == Key.DownArrow || event.text == Key.UpArrow {
+                if !event.repeat { root.toggle-menu(); }
+                return accept;
+            }
+            return reject;
+        }
+    }
+    pointer := TouchArea {
+        enabled: root.available;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.toggle-menu(); }
+    }
+
+    // Winit hosts this anchored list in the parent surface.
+    menu := PopupWindow {
+        x: 0; y: root.height + 2px;
+        width: root.width;
+        height: min(7, root.model.length) * root.row-height + 2px;
+        close-policy: close-on-click-outside;
+        forward-focus: keys;
+        init => { keys.focus(); keys.reveal(root.highlight); }
+        keys := FocusScope {
+            focus-on-click: false;
+            function reveal(index: int) {
+                root.highlight = min(root.model.length - 1, max(0, index));
+                let start = root.highlight * root.row-height;
+                list.content-y = min(-start, max(list.visible-height - start - root.row-height, list.content-y));
+            }
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    menu.close();
+                    return accept;
+                }
+                if event.text == Key.Return || event.text == " " {
+                    if !event.repeat { root.choose(root.highlight); }
+                    return accept;
+                }
+                if event.text == Key.DownArrow || event.text == Key.UpArrow {
+                    self.reveal(root.highlight + (event.text == Key.DownArrow ? 1 : -1));
+                    return accept;
+                }
+                if event.text == Key.Home || event.text == Key.End {
+                    self.reveal(event.text == Key.Home ? 0 : root.model.length - 1);
+                    return accept;
+                }
+                if event.text == Key.Tab { menu.close(); }
+                return reject;
+            }
+            Rectangle {
+                background: #142b41;
+                border-width: 1px; border-color: #53697d;
+                list := ListView {
+                    x: 1px; y: 1px; width: parent.width - 2px - list-scrollbar.width; height: parent.height - 2px;
+                    vertical-scrollbar-policy: always-off;
+                    content-width: self.visible-width;
+                    for entry[index] in root.model: PanelButton {
+                        height: root.row-height;
+                        text: entry; navigation: true; checked: root.highlight == index;
+                        clicked => { root.choose(index); }
+                    }
+                }
+                list-scrollbar := PanelScrollBar {
+                    x: parent.width - self.width - 1px; y: 1px; height: list.height;
+                    content-height: list.content-height; content-y <=> list.content-y;
+                }
+            }
+        }
+    }
+}
+
+export component PanelOverlay inherits Rectangle {
+    callback backdrop-clicked;
+    in property <bool> embedded;
+    in property <string> heading;
+    in property <length> panel-width: 900px;
+    in property <length> panel-height: 700px;
+    in property <length> header-height: 52px;
+    out property <length> content-width: body.width;
+    out property <length> content-height: body.height;
+    in property <image> brand-mark: @image-url("../../../assets/icons/pttstella.png");
+    in property <image> heading-icon;
+    background: root.embedded ? transparent : #00000088;
+    TouchArea {
+        enabled: root.visible && !root.embedded;
+        width: parent.width; height: parent.height;
+        clicked => {
+            if self.mouse-x < panel.x || self.mouse-x >= panel.x + panel.width
+                || self.mouse-y < panel.y || self.mouse-y >= panel.y + panel.height {
+                root.backdrop-clicked();
+            }
+        }
+        scroll-event => { return accept; }
+    }
+    panel := Rectangle {
+        width: root.embedded ? parent.width : min(root.panel-width, parent.width - 32px);
+        height: root.embedded ? parent.height : min(root.panel-height, parent.height - 32px);
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        background: root.embedded ? transparent : PanelTheme.surface;
+        border-color: PanelTheme.border; border-width: root.embedded ? 0px : 1px; border-radius: 3px;
+        drop-shadow-color: root.embedded ? transparent : #00000099; drop-shadow-offset-y: 12px; drop-shadow-blur: 40px;
+        clip: true;
+        VerticalLayout {
+            if !root.embedded: Rectangle {
+                height: root.header-height;
+                HorizontalLayout {
+                    padding-left: 22px; padding-right: 22px; spacing: 10px;
+                    Rectangle {
+                        width: 24px;
+                        Image { width: 24px; height: 24px; y: (parent.height - self.height) / 2; source: root.brand-mark; image-fit: contain; }
+                    }
+                    Text { text: "PTTStella"; color: PanelTheme.text; font-size: 16px; vertical-alignment: center; }
+                    Rectangle { horizontal-stretch: 1; }
+                    if root.heading-icon.width > 0: Image {
+                        source: root.heading-icon; width: 18px; height: 18px;
+                        colorize: PanelTheme.gold; y: (parent.height - self.height) / 2;
+                    }
+                    Text { text: root.heading; color: PanelTheme.muted; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
+                }
+                Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: PanelTheme.border; }
+            }
+            body := Rectangle { vertical-stretch: 1; clip: true; @children }
+        }
+    }
+}
