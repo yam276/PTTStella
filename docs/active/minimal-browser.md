@@ -6,7 +6,7 @@
 
 ## 2026-11-23 Linux libmpv 改為選用
 
-依使用者要求，Linux 沒有 libmpv2 時只停用影片並提示。播放器原本經 libmpv2-sys 直接連結 libmpv，缺少時整個程式無法啟動。現在 18 個 libmpv 函式改由同一張函式表呼叫：macOS／Windows 照舊連結 App 內附的 libmpv，Linux 在第一次開影片時以 libloading 載入系統 `libmpv.so.2`。載入失敗時點影片只顯示安裝 libmpv2 後重開的提示，不開播放器，右鍵仍可開啟或複製連結。正式 Linux 包把 `libmpv2` 由 Depends 改為 Recommends，若主程式的 ldd 或 Depends 仍出現 libmpv 即拒絕打包。macOS 以建置用的 Homebrew libmpv 實際走執行時載入並建立／釋放播放器，四色 MP4 影片探針（軟體路徑）通過；core、Slint lib 401／bin 113／multi_instance 10、Dioxus lib 386／bin 121／multi_instance 10、兩組 clippy、Slint 依賴檢查、189 個 tooling 與 385 個 JS 測試通過。Linux 主程式不連結 libmpv 依賴 rustc 預設的 `--as-needed`，要由 CI 的 Linux 打包檢查確認，尚未在 Linux CI 或實機執行；沒有 libmpv2 時的提示也未在 Linux 上操作。
+依使用者要求，Linux 沒有 libmpv2 時只停用影片並提示。播放器原本經 libmpv2-sys 直接連結 libmpv，缺少時整個程式無法啟動。現在 18 個 libmpv 函式改由同一張函式表呼叫：macOS／Windows 照舊連結 App 內附的 libmpv，Linux 在第一次開影片時以 libloading 載入系統 `libmpv.so.2`。載入失敗時點影片只顯示安裝 libmpv2 後重開的提示，不開播放器，右鍵仍可開啟或複製連結。正式 Linux 包把 `libmpv2` 由 Depends 改為 Recommends，若主程式的 ldd 或 Depends 仍出現 libmpv 即拒絕打包。macOS 以建置用的 Homebrew libmpv 實際走執行時載入並建立／釋放播放器，四色 MP4 影片探針（軟體路徑）通過；core、Slint lib 401／bin 113／multi_instance 10、Dioxus lib 386／bin 121／multi_instance 10、兩組 clippy、Slint 依賴檢查、189 個 tooling 與 385 個 JS 測試通過。[verify run 45121644726](https://github.com/yam276/PTTStella/actions/runs/45121644726) 從 `85f4a0b` 四平台通過；下載的 Linux 包校驗碼相符，`.deb` control 為 `Recommends: libmpv2` 且 Depends 不含 libmpv，主程式 ELF NEEDED 只有 freetype／fontconfig／libstdc++／libgcc／libm／libc 與 loader，含執行時載入的 `libmpv.so.2` 名稱。Linux 實機安裝、播放與沒有 libmpv2 時的提示尚未操作。
 
 ## 2026-11-23 頁尾 100% 配色
 
