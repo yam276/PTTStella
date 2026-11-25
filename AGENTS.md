@@ -2,14 +2,14 @@
 
 ## 目前目標
 
-- 第一個交付是一個 Rust／Dioxus 的 PTT 專用圖形介面，外觀像 terminal：連線、手動登入 PTT、正確顯示、必要鍵盤及斷線。Windows 先驗證，架構維持可攜；其他平台後續各自實測。
+- 第一個交付是一個 Rust／Slint 的 PTT 專用圖形介面（0.5.0 起取代 Dioxus；Dioxus 版以 `pttstella-dioxus` 保留回退到移除提交為止），外觀像 terminal：連線、手動登入 PTT、正確顯示、必要鍵盤及斷線。Windows 先驗證，架構維持可攜；其他平台後續各自實測。
 - [操作功能研究](docs/feature-research.md) 的選取／複製、IME／貼上、網址操作、PNG 匯出與字型設定已逐項實作及提交；實測範圍及待人工驗收項目維護於同一 active plan。登入卡住的實站重試待使用者回報，不以合成測試結案。
 - 先讀 [README](README.md)、[交付流程](CONTRIBUTING.md)、[唯一 active plan](docs/active/minimal-browser.md) 與相關程式。字型／欄位／雙色字要求見 [顯示契約](docs/dual-color.md)。
 - 最小滑鼠導覽支援保守辨識列表／閱讀畫面、點文章整行開啟、左緣返回與翻頁。採低透明度藍金呼吸光棒，保留 ANSI 文字對比及原始格線；減少動態效果時停用動畫，視覺提示不進 PNG。研究資料維持在 repo 外，產品契約見 [滑鼠導覽](docs/navigation.md)。
 - 截圖提供整頁與目前畫面連續行的 PNG，消費 Rust 選取結果的行範圍與同一 renderer；完整行寬、不因縮放改變尺寸，不包含選取、游標或工具列。只在使用者明確點擊時匯出，不自動跨頁或錄製 session。
 - 防閒置依使用者要求預設開啟，僅在已辨識的列表／閱讀畫面、UI 與 connection 的版本及操作狀態均允許時刷新；登入／編輯／組字／貼上／選取等期間暫停。唯一 timer 由 connection 擁有，不補送睡眠或斷線期間操作；開關與驗證邊界見 [保活契約](docs/keepalive.md)。
-- 媒體依 [MVP 規格](docs/media.md) 按需預覽，Rust 擁有 URL／下載／容量與快取，WebView 負責顯示及 codec；背景工作不得阻塞 BBS 或污染新預覽。先不實作獨立文章模型、板名導覽、啟動時自動登入或追蹤。使用者後續授權的按鈕登入與鑰匙圈保存依 [登入契約](docs/login.md)，只有明確選擇才保存、按登入才送出。一般 terminal 的手動鍵盤操作不等於整個 session 唯讀。
-- 當前已有 Rust 畫面核心、replay、Dioxus 畫面及 WebSocket／Telnet 傳輸；依使用者要求擴充 [站點與編碼](docs/sites.md)，其他站先使用原始輸入，PTT 專用命令僅用於精確 PTT 目標。不是系統終端或通用模擬器，不實作 shell／PTY。驗證狀態以 active plan 為準，規劃、編譯、重放、實際畫面及實站登入結果分開報告。
+- 媒體依 [MVP 規格](docs/media.md) 按需預覽，Rust 擁有 URL／下載／容量與快取，Slint 負責顯示，影片由 libmpv 播放；背景工作不得阻塞 BBS 或污染新預覽。先不實作獨立文章模型、板名導覽、啟動時自動登入或追蹤。使用者後續授權的按鈕登入與鑰匙圈保存依 [登入契約](docs/login.md)，只有明確選擇才保存、按登入才送出。一般 terminal 的手動鍵盤操作不等於整個 session 唯讀。
+- 當前已有 Rust 畫面核心、replay、Slint 畫面及 WebSocket／Telnet 傳輸；依使用者要求擴充 [站點與編碼](docs/sites.md)，其他站先使用原始輸入，PTT 專用命令僅用於精確 PTT 目標。不是系統終端或通用模擬器，不實作 shell／PTY。驗證狀態以 active plan 為準，規劃、編譯、重放、實際畫面及實站登入結果分開報告。
 - 僅診斷編譯與合成測試視窗置頂，啟動時不搶焦點；正常發佈版使用一般視窗。置頂不等於取得鍵盤焦點，不為測試放寬失焦／隱藏時暫停全文的保護；原生操作工具無法啟用視窗時如實記錄限制。
 - 正常啟動連至使用者明確保存的預設站，初始為 PTT WSS；只自動連線，不自動登入或重送輸入。一般 gate 的合成 probe 只連本機服務。工具列由可拖曳浮球開啟並按分類扇形展開，避免上緣 hover 與系統列衝突；斷線／錯誤保持狀態提示可見。畫面縮放維持比例，方塊圖形不依賴字型留白。
 
@@ -41,7 +41,7 @@
 - 把目標寫成可觀察的輸入、結果及驗收。可逆且已授權的工作持續完成；只為實質缺少資訊或授權詢問，不為例行選擇反覆確認。
 - 保持方法與狀態責任清楚；第二份非平凡近似實作出現時找共同擁有者。修 bug 檢查產生邊界及直接消費者，移除被取代路徑，不混入無關重構。
 - 執行 [對應 gate](CONTRIBUTING.md)。缺 runner／案例／backend 回報 not_ready，未執行不算 passed；空 trace、全 skip 或只改 expected 不能結案。
-- 核心測試使用同一生產 reducer 與獨立 expected；顯示問題另用實際 Dioxus host；登入以實站人工流程證明。單平台結果不能冒充跨平台完成。
+- 核心測試使用同一生產 reducer 與獨立 expected；顯示問題另用實際 Slint 視窗；登入以實站人工流程證明。單平台結果不能冒充跨平台完成。
 - 效能以同一工作量量測自己的基線；區分 cold／warm、wall time、CPU 與 process-family memory，不搬用其他專案的門檻。
 - 後續以功能或可獨立驗收的修正為單位提交，完成驗證後使用 Conventional Commit 加短 body；不延續初期整批壓成單一 commit 的做法，只有使用者明確要求才壓縮或改寫歷史。沒有要求不建立 remote／PR 或公開發佈；不得代替使用者宣稱人工審閱完成。
 - 本 repo 的 Git author 與 committer 固定使用 `yam276 <59956724+yam276@users.noreply.github.com>`，由 repo-local Git 設定保存；每次提交前核對身分。歷史整理遵從使用者明確要求，改寫前在 repo 外保存回復備份。
