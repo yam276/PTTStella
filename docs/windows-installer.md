@@ -7,6 +7,35 @@
 
 另附校驗碼、來源 manifest 與 `-sources.tar` 供驗證。影片播放使用內附的 mpv v0.42.0 官方 LGPL DLL。Windows 10／11 x64 為目標，ARM 與其他 Windows 版本未納入此交付。
 
+## 使用者流程
+
+1. Setup 提供繁體中文／英文，安裝前顯示 GPL-3.0-or-later 授權，預設安裝到 `%LOCALAPPDATA%\Programs\PTTStella`，採目前使用者範圍，不需要管理員權限。
+2. 沿用 0.4.x 的 AppId，會直接覆蓋原本的安裝；舊版的 `licenses` 資料夾整個換成新版授權。PTTStella 正在執行時，Setup 會要求先關閉，安裝完不自動啟動。
+3. 設定、收藏、草稿等資料存在目前 Windows 帳號的資料目錄，保存的密碼在 Windows 認證管理員，都不在安裝目錄裡；升級與解除安裝都不會刪除它們。
+4. 不偵測也不安裝 WebView2。
+5. 免安裝版只是不建立安裝／解除安裝登錄，資料位置和 Setup 版相同，並不是把資料帶在 EXE 旁邊。
+
+## 建置與來源
+
+Release 由 GitHub Actions 的 `windows-2025` runner 執行 `python tooling/bundle_release.py --out-dir dist/release` 產生，流程見[自動發佈](releases.md)。Windows 部分由 [bundle_slint_release.py](../tooling/bundle_slint_release.py) 負責：
+
+- 下載 mpv v0.42.0 官方 LGPL x86_64 版並核對固定 SHA-256，`libmpv-2.dll` 不做修改，連同其 LGPL 授權與來源紀錄 `licenses/libmpv-provenance.json` 一起交付。
+- 依實際 PE imports 收齊 Visual C++ runtime DLL 的完整相依，放在 `pttstella.exe` 旁邊，來源與雜湊記在 `licenses/vc-crt-provenance.json`。只允許系統 DLL、`libmpv-2.dll` 與這些 runtime DLL。
+- 以 [installer-tools.json](../tooling/windows/installer-tools.json) 的固定網址與 SHA-256 安裝 Inno Setup，用 [pttstella.iss](../tooling/windows/pttstella.iss) 編譯 Setup；Setup 出現任何 WebView 相關 import 就拒絕交付。
+- `-sources.tar` 收錄 PTTStella 與 crates 的來源清單、mpv 原始碼及官方簽章。官方 DLL 內部靜態連結的 FFmpeg 等函式庫無法逐一取得原始碼，只附取得方式，清單標為 `directions_only`。
+
+App 與 Setup 目前未作 Authenticode 簽署，下載後 Windows SmartScreen 可能提示。
+
+## 驗證
+
+```text
+python -m unittest discover -s tooling -p 'test_*.py'
+```
+
+一般 Python 測試以自製資料與注入的工具結果核對打包邏輯，不接觸真正的 Windows 安裝。Desktop Release 的 `verify` 模式會在 Windows runner 實際編譯、打包並檢查 PE imports，但不會啟動 App 或執行 Setup。
+
+仍需在 Windows 10／11 實機確認：覆蓋 0.4.2 的 Setup 後能啟動並沿用資料、沒有 WebView2 的電腦能開啟、注音與日文輸入法，以及認證管理員裡的密碼能否沿用。目前狀態見 [active plan](active/minimal-browser.md) 與[自動發佈](releases.md#050-發佈結果2026-11-23)。
+
 ## 0.4.2 及更早（Dioxus 版）
 
 以下 WebView2 與單一 EXE 的說明適用 0.4.2 及更早的 Dioxus 版。Windows x64 Release 提供兩種產品下載，擇一使用：
@@ -28,7 +57,7 @@
 
 macOS 交付 ZIP 內的一個 `.app`，Finder 視為單一 App，內部仍為標準目錄套件。Linux 提供 `.deb`／`.tar.gz`，程式同樣內嵌上述資產，但 GTK／WebKitGTK 等系統相依套件由發行版提供，並非跨發行版單檔免安裝程式。
 
-## 使用者流程
+### 使用者流程
 
 1. Setup 提供繁體中文／英文，預設安裝到 `%LOCALAPPDATA%\Programs\PTTStella`，採目前使用者範圍。
 2. 按「安裝」後，讀取 Microsoft 公開的 Runtime `pv` registry 值，同時檢查 HKLM／HKCU 的 32／64-bit view。空白、無效或零版本不當作已安裝。
@@ -40,7 +69,7 @@ macOS 交付 ZIP 內的一個 `.app`，Finder 視為單一 App，內部仍為標
 
 偵測位置與命令依 [Microsoft 部署文件](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)。Setup 的前置檢查使用 Inno Setup 的 [PrepareToInstall](https://jrsoftware.org/ishelp/topic_scriptevents.htm)，發生錯誤時不進入檔案安裝階段。
 
-## 建置與來源
+### 建置與來源
 
 Windows 安裝 Inno Setup **7.1.0** 後執行：
 
@@ -58,7 +87,7 @@ WebView2 bootstrapper 取自 Microsoft Evergreen 官方端點 `https://go.micros
 
 本機打包器在選定的 EXE、ZIP 與校驗碼全部完成才原子交付；競爭建立檔案時保留已有產物，清除本次新建的輸出。ZIP 保留作為開發／解壓驗證產物；Release 只收錄 Setup 與免安裝 EXE，不發佈 ZIP、裸 DLL 或資產資料夾。缺任一個 EXE 即禁止發佈。App 與 Setup 目前未作產品 Authenticode 簽署；Microsoft bootstrapper 的簽章驗證不能當作產品已簽署。
 
-## 驗證
+### 驗證
 
 ```text
 python -m unittest discover -s tooling -p 'test_*.py'
