@@ -735,8 +735,9 @@ impl Output {
     }
     /// Slint reads `mouse-cursor` before `pointer-event` reaches this hit test
     /// and applies it only while dispatching pointer input. Replay the latest
-    /// real window position once after the hit changed; both surfaces ignore
-    /// the replay, so no hover, station or selection state changes.
+    /// real window position once after the hit or the text-selection cursor
+    /// changed; both surfaces ignore the replay, so no hover, station or
+    /// selection state changes.
     fn refresh_pointer_cursor(&self, ui: &TerminalWindow) {
         if !ui.global::<crate::PointerRefresh>().get_inside() || self.cursor_refresh.replace(true) {
             return;
@@ -756,6 +757,10 @@ impl Output {
             ui.window()
                 .dispatch_event(slint::platform::WindowEvent::PointerMoved { position });
             refresh.set_replaying(false);
+            // The winit backend installs a custom cursor only at the start of
+            // its next window event. Without one the pending arrow waited for
+            // the press, and macOS showed the system arrow while it was held.
+            ui.window().request_redraw();
         });
     }
     fn hover_overlay(&self, ui: &TerminalWindow) {
@@ -982,8 +987,14 @@ impl Output {
                 .is_some_and(|(_, text)| text.rows.len() <= export::ROWS),
         );
         ui.set_selection_dragging(selected.gesture.is_some());
-        ui.set_selection_cursor(selected.text_cursor());
+        let text_cursor = selected.text_cursor();
         drop(selected);
+        // Slint already read the cursor for this event; a drag that starts or
+        // ends a text selection shows its cursor without waiting for a move.
+        if ui.get_selection_cursor() != text_cursor {
+            ui.set_selection_cursor(text_cursor);
+            self.refresh_pointer_cursor(ui);
+        }
         ui.invoke_context_updated();
         ui.invoke_station_color_updated();
         ui.invoke_keep_alive_changed();

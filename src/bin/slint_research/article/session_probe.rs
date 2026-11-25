@@ -306,17 +306,30 @@ pub fn start(
                         "web reading hover did not choose its edge cursor",
                     )
                     .await?;
+                    // Mirror the native filter: a real press also marks the
+                    // window's button state, and the hold lasts several turns
+                    // so deferred `changed` callbacks run before release.
+                    ui.set_native_pointer_buttons(1);
+                    ui.set_native_pointer_down(true);
                     ui.window()
                         .dispatch_event(slint::platform::WindowEvent::PointerPressed {
                             position,
                             button,
                         });
-                    require(
-                        ui.get_selection_dragging()
-                            && !ui.get_selection_cursor()
-                            && ui.get_pointer_cursor() == expected,
-                        "pressing a web reading edge left its navigation cursor",
-                    )?;
+                    for turn in 0..15 {
+                        require(
+                            ui.get_selection_dragging()
+                                && !ui.get_selection_cursor()
+                                && ui.get_pointer_cursor() == expected,
+                            &format!(
+                                "holding a web reading edge left its navigation cursor after {turn} turns: {:?}",
+                                ui.get_pointer_cursor()
+                            ),
+                        )?;
+                        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                    }
+                    ui.set_native_pointer_buttons(0);
+                    ui.set_native_pointer_down(false);
                     ui.window()
                         .dispatch_event(slint::platform::WindowEvent::PointerReleased {
                             position,
