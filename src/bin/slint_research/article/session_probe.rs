@@ -145,10 +145,13 @@ pub fn start(
                 let top = ui.get_terminal_origin_y() + ui.get_raster_top();
                 for (col, row, expected) in [
                     (2., 10., crate::PointerKind::Back),
+                    (2., 0.25, crate::PointerKind::First),
                     (60., 0.25, crate::PointerKind::First),
                     (60., 5., crate::PointerKind::PreviousPage),
                     (60., 16., crate::PointerKind::NextPage),
-                    (60., 22.75, crate::PointerKind::Last),
+                    (60., 22.75, crate::PointerKind::NextPage),
+                    (2., 23.5, crate::PointerKind::Last),
+                    (60., 23.5, crate::PointerKind::Last),
                 ] {
                     let position = slint::LogicalPosition::new(
                         left + col * ui.get_raster_width() / 80.,
@@ -252,22 +255,40 @@ pub fn start(
                         && ui.get_article_active(),
                     "stale input changed the current surface",
                 )?;
-                // Web reading shares the terminal's Home/End bands, and an
-                // unmoved press keeps the navigation cursor until release.
+                // Like the terminal reader, the top row is Home and the pinned
+                // footer status row is End, both from their left edge where
+                // Back would otherwise win. An unmoved press keeps the
+                // navigation cursor until release.
                 owner.route_input(generation, b"\x1b[H".to_vec())?;
                 verification::foreground(&ui, true);
-                let x = ui.get_article_origin_x() + ui.get_article_line_width() * 0.6;
+                let x = ui.get_article_origin_x() + 4.;
                 let edge = |bottom: bool| {
                     let top = ui.get_article_origin_y();
                     slint::LogicalPosition::new(
                         x,
                         if bottom {
-                            top + ui.get_article_body_height() - 2.
+                            top + ui.get_article_body_height()
+                                + ui.get_article_line_height() / 2.
                         } else {
                             top + 2.
                         },
                     )
                 };
+                // The last body row above the footer pages, it is not End.
+                let last_row = slint::LogicalPosition::new(
+                    ui.get_article_origin_x() + ui.get_article_line_width() * 0.6,
+                    ui.get_article_origin_y() + ui.get_article_body_height() - 2.,
+                );
+                wait(
+                    || {
+                        ui.window().dispatch_event(
+                            slint::platform::WindowEvent::PointerMoved { position: last_row },
+                        );
+                        ui.get_pointer_cursor() == crate::PointerKind::NextPage
+                    },
+                    "the last web reading body row did not page",
+                )
+                .await?;
                 for (bottom, expected) in [
                     (true, crate::PointerKind::Last),
                     (false, crate::PointerKind::First),

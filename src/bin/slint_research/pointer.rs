@@ -183,71 +183,78 @@ impl Geometry {
             })
             .flatten()
     }
-    fn page(self, y: f32, top: f32, bottom: f32, halves: bool) -> Option<Intent> {
-        reading_zone(
-            y,
+    fn page(self, y: f32, top: f32, bottom: f32, reader: bool) -> Option<Intent> {
+        let (top, bottom, row) = (
             top.max(0.),
             bottom.min(self.height),
             self.size.height as f32 / 24.,
-            self.dpi,
-            halves,
-        )
+        );
+        if reader {
+            reading_zone(y, top, bottom, row, self.dpi)
+        } else {
+            edge_zone(y, top, bottom, row, self.dpi)
+        }
     }
 }
 
-/// Web-reading navigation after links: the left 17 columns and margin go
-/// Back, then the same First/Last edge bands and halves as the terminal.
-/// The pinned source footer below the body has no navigation.
+/// Web-reading navigation after links and IDs, matching the terminal
+/// reader: the top band is Home across the whole row and the pinned source
+/// footer, the status row, is End, label included. Between them the left 17
+/// columns and margin go Back and the body splits into page halves.
 pub fn article_navigation(
     geometry: &ArticleGeometry,
     point: (f32, f32),
     cell: Option<Position>,
 ) -> Option<Intent> {
-    if let Some(cell) = cell {
-        if cell.row >= geometry.body_rows {
-            return None;
-        }
-        if cell.col < 17 {
-            return Some(Intent::Back);
-        }
+    if point.1 >= geometry.body_height {
+        return Some(Intent::Last);
     }
-    if point.0 < geometry.left.max(0.) {
-        return Some(Intent::Back);
-    }
-    reading_zone(
+    let zone = reading_zone(
         point.1,
         0.,
         geometry.body_height,
         geometry.row as f32,
         geometry.dpi,
-        true,
-    )
+    );
+    if zone != Some(Intent::First)
+        && (cell.is_some_and(|cell| cell.col < 17) || point.0 < geometry.left.max(0.))
+    {
+        return Some(Intent::Back);
+    }
+    zone
 }
 
-/// Shared vertical bands for terminal and web reading: one row (16-32 px,
-/// at most a quarter of the span) at each edge for First/Last, then halves.
-pub fn reading_zone(
-    y: f32,
-    top: f32,
-    bottom: f32,
-    row: f32,
-    dpi: f32,
-    halves: bool,
-) -> Option<Intent> {
+/// One row (16-32 px, at most a quarter of the span) at a span's edge.
+fn edge_band(top: f32, bottom: f32, row: f32, dpi: f32) -> f32 {
+    row.clamp(16. * dpi, 32. * dpi).min((bottom - top) / 4.)
+}
+
+/// Reader body bands for terminal and web reading: the top band is First,
+/// the rest splits into page halves. The reader's End is its footer status
+/// row, so the body has no bottom band.
+pub fn reading_zone(y: f32, top: f32, bottom: f32, row: f32, dpi: f32) -> Option<Intent> {
     if y < top || y >= bottom {
         return None;
     }
-    let edge = row.clamp(16. * dpi, 32. * dpi).min((bottom - top) / 4.);
+    Some(if y < top + edge_band(top, bottom, row, dpi) {
+        Intent::First
+    } else if y < (top + bottom) / 2. {
+        Intent::PreviousPage
+    } else {
+        Intent::NextPage
+    })
+}
+
+/// List edge bands: First at the top, Last at the bottom, nothing between.
+fn edge_zone(y: f32, top: f32, bottom: f32, row: f32, dpi: f32) -> Option<Intent> {
+    if y < top || y >= bottom {
+        return None;
+    }
+    let edge = edge_band(top, bottom, row, dpi);
     if y < top + edge {
         Some(Intent::First)
     } else if y >= bottom - edge {
         Some(Intent::Last)
-    } else if halves {
-        Some(if y < (top + bottom) / 2. {
-            Intent::PreviousPage
-        } else {
-            Intent::NextPage
-        })
     } else {
         None
     }
@@ -308,23 +315,29 @@ pub fn hit(
         if !can_navigate {
             return None;
         }
+        if matches!(context, Context::ArticleReading { .. }) {
+            // The footer status row is End, label included, as in a list.
+            if cell.row >= 23 {
+                return Some(Hit::Navigate(Intent::Last));
+            }
+            let zone = geometry.page(
+                point.1,
+                geometry.top,
+                geometry.top + geometry.size.height as f32 * 23. / 24.,
+                true,
+            );
+            // The top band is Home across the whole row, before the left Back.
+            if zone != Some(Intent::First)
+                && back(context).is_some_and(|(_, end)| cell.col < end)
+            {
+                return Some(Hit::Navigate(Intent::Back));
+            }
+            return zone.map(Hit::Navigate);
+        }
         if back(context)
             .is_some_and(|(first, end)| cell.row >= first && cell.row < 23 && cell.col < end)
         {
             return Some(Hit::Navigate(Intent::Back));
-        }
-        if matches!(context, Context::ArticleReading { .. }) {
-            if cell.row >= 23 {
-                return None;
-            }
-            return geometry
-                .page(
-                    point.1,
-                    geometry.top,
-                    geometry.top + geometry.size.height as f32 * 23. / 24.,
-                    true,
-                )
-                .map(Hit::Navigate);
         }
         if edges(context) {
             if cell.row == frame.rows - 1 {
