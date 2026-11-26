@@ -32,6 +32,8 @@ cargo run --locked --features native-player-probe --bin pttstella
 | Windows 原生視窗 | `python tooling/check.py desktop` |
 | 打包或發佈 | `python -m unittest discover -s tooling -p 'test_*.py'`、文件檢查、`actionlint .github/workflows/*.yml`，再以 GitHub Actions 的 `verify` 模式核對各平台產物。 |
 
+日常修改的 `--probe-* --verify-*` 合成視窗探針只跑與改動片段相關的項目（例如改連結 hover 跑媒體探針、改文章版面跑文章視窗與行內圖片探針），回報時列出略過的探針，不把未跑的算成通過；共用幾何、renderer 或 pointer 路由等大範圍改動再擴大範圍。正式發佈前在發佈 commit 上跑完整探針組。上表的單元測試、Clippy 與文件檢查各為一條指令，照常執行。
+
 一般測試使用合成資料和本機服務。涉及畫面、鍵盤、滑鼠或輸入法時，請在受影響平台用實際 App 驗證，並在 PR 註明已測及待驗的範圍。缺少必要環境時記為 `not_ready`。[驗證與產物清理](docs/development-harness.md)
 
 ## 提交
