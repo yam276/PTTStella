@@ -803,17 +803,6 @@ impl Output {
             ui.set_pointer_cursor(cursor);
             self.refresh_pointer_cursor(ui);
         }
-        ui.set_pointer_url(match hit {
-            Some(Hit::Link(index)) => self
-                .projection
-                .borrow()
-                .as_ref()
-                .and_then(|p| p.links.get(index))
-                .map(|l| l.url.clone())
-                .unwrap_or_default()
-                .into(),
-            _ => "".into(),
-        });
         if let (Some(Hit::Navigate(Intent::Open { row })), Some(size)) = (hit, self.size.get()) {
             let frame = self.renderer.borrow();
             let dpi = ui.window().scale_factor();

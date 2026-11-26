@@ -509,7 +509,6 @@ export component TerminalWindow inherits Window {
     in property <bool> navigation-busy;
     in property <[SelectionRect]> navigation-rects;
     in property <PointerKind> pointer-cursor;
-    in property <string> pointer-url;
     out property <bool> context-interaction-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
@@ -806,13 +805,6 @@ export component TerminalWindow inherits Window {
                     navigate(code) => { root.article-navigate(code); }
                     scroll-to(vertical,fraction) => { root.article-scroll-to(vertical,fraction); }
                     zoom-request(delta) => { root.article-zoom-request(delta); }
-                }
-                if root.pointer-url != "": Rectangle {
-                    y: parent.height - 26px;
-                    width: parent.width;
-                    height: 26px;
-                    background: PanelTheme.surface;
-                    Text { text: root.pointer-url; color: #e3e8ee; overflow: elide; vertical-alignment: center; }
                 }
                 hover-card := MediaHover {
                     visible:root.media-hover-open;width:parent.width;height:parent.height;
