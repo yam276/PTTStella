@@ -177,3 +177,9 @@ Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [
 發佈後依使用者要求在說明補上效能比較：先更新 [v0.5.0 release notes](release-notes/v0.5.0.md)，再以 `gh release edit` 把同一份文字寫入已公開的 Release，tag 與下載檔不變。效能表沿用 Slint 評估期間在 Apple Silicon Mac 的同負載量測，Windows、Intel Mac、Linux 與實站仍未量測。
 
 `main` 隨後快轉合併回 `develop`，`develop` 改為 `0.6.0-dev.1`，此提交不合併回 `main`。上一節列出的 Windows、macOS 升級／回退、Intel Mac 與 Linux 實機驗收仍未執行。
+
+## 0.5.1 發佈準備（2026-11-26）
+
+使用者要求發佈 0.5.1。`develop` 自 0.5.0 起只有修正與文件：網頁閱讀與終端共用 BBS 框（`36336d5`）、閱讀首尾改為最上一列與頁尾狀態列（`62a4a64`）、按住時的導覽游標（`9841542`）、展開圖片兩側可導覽（`4dcb213`）、移除底部網址列（`35ed3b0`），以及 Windows 安裝說明、AGENTS.md 與 CONTRIBUTING 的文件更新。`Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.1`，新增 [v0.5.1 release notes](release-notes/v0.5.1.md)。
+
+macOS arm64 實機已安裝並使用過同一批修正的本機測試版（`ec9136d`，0.6.0-dev.1）。Windows、Intel Mac 與 Linux 的實機驗收仍未執行，與 0.5.0 相同。
