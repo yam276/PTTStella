@@ -3,44 +3,59 @@ use pttstella::article_cache::MAX_WINDOW_ROWS;
 #[cfg(test)]
 use std::ops::Range;
 
+/// Width of the horizontal scrollbar strip, reserved only while zoom
+/// overflows the view horizontally.
+pub const SCROLLBAR: f32 = 12.;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
     pub width: u32,
     pub row: u32,
     pub dpi: f32,
     pub view_width: f32,
+    pub view_height: f32,
+    /// Logical inset above the BBS box; matches the terminal raster's centring.
+    pub top: f32,
     pub body_height: f32,
     pub rows: usize,
 }
 impl Layout {
+    /// Web reading occupies the terminal raster's own box: the same
+    /// whole-pixel row and the same centring, so entering or leaving an
+    /// article neither rescales nor moves the BBS cells. The pinned footer is
+    /// that box's last row; the body is the rows above it. Only zoom past
+    /// the view lets the box fill a dimension, and only horizontal overflow
+    /// reserves the bottom scrollbar strip.
     pub fn fit(width: f32, height: f32, dpi: f32, zoom: f32, rows: usize) -> Option<Self> {
         if [width, height, dpi, zoom]
             .iter()
             .any(|x| !x.is_finite() || *x <= 0.)
-            || width <= 12.
-            || height <= 13.
             || rows == 0
         {
             return None;
         }
-        let row = (((width - 12.) / 960.).min((height - 12.) / 576.) * dpi * zoom * 24.)
-            .floor()
-            .clamp(1., 204.) as u32;
+        let row = crate::renderer::Size::row(width, height, dpi, zoom)?;
+        let line = row as f32 / dpi;
+        let overflow = row as f32 * 40. > width * dpi + 0.5;
+        let bar = if overflow { SCROLLBAR } else { 0. };
+        let boxed = (line * 24. + bar).min(height);
         let layout = Self {
             width: row * 40,
             row,
             dpi,
             rows,
-            view_width: width - 12.,
-            body_height: (height - 12. - row as f32 / dpi).max(1.),
+            view_width: width,
+            view_height: height,
+            top: (height - boxed) / 2.,
+            body_height: (boxed - line - bar).max(1.),
         };
         // Includes the two buffered rows on both sides. Whole document length
         // never controls a raster allocation.
-        let line = layout.line_height();
         if [
             line,
             layout.logical_width(),
             layout.body_height,
+            layout.top,
             rows as f32 * line,
         ]
         .iter()
@@ -71,8 +86,14 @@ impl Layout {
             0.
         }
     }
+    /// Horizontal scroll range; zero unless zoom overflows by over half a pixel.
     pub fn maximum_x(self) -> f32 {
-        (self.logical_width() - self.view_width).max(0.)
+        let overflow = self.logical_width() - self.view_width;
+        if overflow * self.dpi > 0.5 {
+            overflow
+        } else {
+            0.
+        }
     }
     #[cfg(test)]
     pub fn visible(self, anchor: f64) -> Range<usize> {
@@ -96,11 +117,11 @@ mod tests {
     #[test]
     fn native_geometry_buffers_only_visible_rows_and_reaches_exact_last_row() {
         let l = Layout::fit(980., 600., 1., 1., 837).unwrap();
-        assert_eq!((l.width, l.row, l.body_height), (960, 24, 564.));
-        assert_eq!(l.visible(0.), 0..26);
+        assert_eq!((l.width, l.row, l.top, l.body_height), (960, 24, 12., 552.));
+        assert_eq!(l.visible(0.), 0..25);
         assert_eq!(l.visible(250.25), 248..276);
         assert_eq!(l.visible(l.maximum()).end, 837);
-        assert!((l.maximum() - 813.5).abs() < 1e-6);
+        assert!((l.maximum() - 814.).abs() < 1e-6);
         assert_eq!(l.clamp(f64::NAN), 0.);
         assert!(l.visible(400.).len() < 30);
     }
@@ -132,5 +153,26 @@ mod tests {
         }
         let l = Layout::fit(980., 600., 1., 1., 23).unwrap();
         assert_eq!(l.maximum(), 0.);
+    }
+    #[test]
+    fn reading_box_is_the_terminal_raster_box() {
+        for (w, h, dpi) in [
+            (1920., 1080., 1.),
+            (1470., 956., 2.),
+            (1001., 599., 1.25),
+            (980., 600., 1.),
+        ] {
+            let l = Layout::fit(w, h, dpi, 1., 837).unwrap();
+            let size = crate::renderer::Size::fit(w, h, dpi, 1.).unwrap();
+            assert_eq!((l.width, l.row * 24), (size.width, size.height));
+            // Centred like the Flickable raster; no strip is reserved at fit.
+            assert!((l.top - (h - size.height as f32 / dpi) / 2.).abs() < 1e-3);
+            assert!((l.body_height - l.line_height() * 23.).abs() < 1e-3);
+            assert_eq!(l.maximum_x(), 0.);
+        }
+        let zoomed = Layout::fit(980., 600., 1., 1.5, 837).unwrap();
+        assert_eq!((zoomed.row, zoomed.top), (36, 0.));
+        assert!(zoomed.maximum_x() > 0.);
+        assert_eq!(zoomed.body_height, 600. - 36. - SCROLLBAR);
     }
 }

@@ -308,6 +308,8 @@ export component TerminalWindow inherits Window {
     in property <length> article-line-height;
     in property <length> article-line-width;
     in property <length> article-body-height;
+    in property <length> article-top;
+    in property <bool> article-scroll-x;
     in property <length> article-document-height;
     in property <length> article-offset-y;
     in property <length> article-offset-x;
@@ -789,6 +791,7 @@ export component TerminalWindow inherits Window {
                     inline-context(kind,index,stamp,x,y)=>{root.inline-context(kind,index,stamp,x,y);}
                     line-height: root.article-line-height; line-width: root.article-line-width;
                     body-height: root.article-body-height; document-height: root.article-document-height;
+                    top: root.article-top; scroll-x: root.article-scroll-x;
                     offset-y: root.article-offset-y; offset-x: root.article-offset-x;
                     blocked: root.article-blocked;
                     native-input: root.terminal-input;

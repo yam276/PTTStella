@@ -14,7 +14,9 @@ fn open_updates_menu(ui: &TerminalWindow, checked: bool) -> Result<usize, String
         ui,
         slint::LogicalPosition::new(
             ui.get_terminal_origin_x() + ui.get_view_width() * 0.72,
-            ui.get_terminal_origin_y() + ui.get_article_body_height().min(64.) / 2.,
+            ui.get_terminal_origin_y()
+                + ui.get_article_top()
+                + ui.get_article_body_height().min(64.) / 2.,
         ),
         slint::platform::PointerEventButton::Right,
     );

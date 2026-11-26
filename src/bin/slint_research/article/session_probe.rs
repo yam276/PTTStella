@@ -263,12 +263,11 @@ pub fn start(
                 verification::foreground(&ui, true);
                 let x = ui.get_article_origin_x() + 4.;
                 let edge = |bottom: bool| {
-                    let top = ui.get_article_origin_y();
+                    let top = ui.get_article_origin_y() + ui.get_article_top();
                     slint::LogicalPosition::new(
                         x,
                         if bottom {
-                            top + ui.get_article_body_height()
-                                + ui.get_article_line_height() / 2.
+                            top + ui.get_article_body_height() + ui.get_article_line_height() / 2.
                         } else {
                             top + 2.
                         },
@@ -277,13 +276,15 @@ pub fn start(
                 // The last body row above the footer pages, it is not End.
                 let last_row = slint::LogicalPosition::new(
                     ui.get_article_origin_x() + ui.get_article_line_width() * 0.6,
-                    ui.get_article_origin_y() + ui.get_article_body_height() - 2.,
+                    ui.get_article_origin_y() + ui.get_article_top() + ui.get_article_body_height()
+                        - 2.,
                 );
                 wait(
                     || {
-                        ui.window().dispatch_event(
-                            slint::platform::WindowEvent::PointerMoved { position: last_row },
-                        );
+                        ui.window()
+                            .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                                position: last_row,
+                            });
                         ui.get_pointer_cursor() == crate::PointerKind::NextPage
                     },
                     "the last web reading body row did not page",

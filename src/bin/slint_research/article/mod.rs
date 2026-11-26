@@ -390,6 +390,8 @@ impl ArticleView {
                 left: ((l.view_width - l.logical_width()).max(0.) / 2. - ui.get_article_offset_x())
                     * l.dpi,
                 width: l.view_width * l.dpi,
+                height: l.view_height * l.dpi,
+                top: l.top * l.dpi,
                 body_height: l.body_height * l.dpi,
                 offset: self.position(&flow),
                 whole_rows: self.whole_rows(&flow, l),
@@ -500,6 +502,8 @@ impl ArticleView {
         ui.set_article_line_height(layout.line_height());
         ui.set_article_line_width(layout.logical_width());
         ui.set_article_body_height(layout.body_height);
+        ui.set_article_top(layout.top);
+        ui.set_article_scroll_x(layout.maximum_x() > 0.);
         ui.set_article_document_height(flow.height() as f32 / layout.dpi);
         ui.set_article_offset_y((self.position(&flow) / f64::from(layout.dpi)) as f32);
         ui.set_article_offset_x(self.x.get() * layout.line_height() / 2.);

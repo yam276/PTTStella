@@ -594,9 +594,10 @@ impl Output {
                 self.can_navigate(ui),
             ),
             SurfaceGeometry::Article(g) => {
+                let local = point.1 - g.top;
                 if !geometry.contains(point)
-                    || point.1 < g.body_height
-                        && g.flow.hit(g.offset + f64::from(point.1)).is_none()
+                    || (0. ..g.body_height).contains(&local)
+                        && g.flow.hit(g.offset + f64::from(local)).is_none()
                 {
                     // Images have their own controls; a gap must not fall
                     // through to text selection, Back or half-page navigation.

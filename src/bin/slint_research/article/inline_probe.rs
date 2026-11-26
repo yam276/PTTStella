@@ -14,7 +14,7 @@ pub(super) fn arrow(ui: &TerminalWindow, index: i32) -> Result<slint::LogicalPos
     let a = arrow_item(ui, index)?;
     Ok(slint::LogicalPosition::new(
         ui.get_terminal_origin_x() + a.x + a.size / 2.,
-        ui.get_terminal_origin_y() + a.y + a.size / 2.,
+        ui.get_terminal_origin_y() + ui.get_article_top() + a.y + a.size / 2.,
     ))
 }
 fn arrow_item(ui: &TerminalWindow, index: i32) -> Result<crate::InlineArrow, String> {
@@ -32,7 +32,7 @@ pub(super) fn picture(ui: &TerminalWindow, index: i32) -> Result<slint::LogicalP
         .ok_or("inline picture not visible")?;
     Ok(slint::LogicalPosition::new(
         ui.get_terminal_origin_x() + p.x + p.width / 2.,
-        ui.get_terminal_origin_y() + p.y + p.height / 2.,
+        ui.get_terminal_origin_y() + ui.get_article_top() + p.y + p.height / 2.,
     ))
 }
 pub(super) fn click(ui: &TerminalWindow, position: slint::LogicalPosition) {
@@ -188,7 +188,7 @@ pub fn start(
                 .find(|&(index, ..)| index == images[0].0)
                 .ok_or("image URL range missing")?;
             let dpi = ui.window().scale_factor();
-            let left = ((ui.get_view_width() - 12. - ui.get_article_line_width()) / 2.).max(0.)
+            let left = ((ui.get_view_width() - ui.get_article_line_width()) / 2.).max(0.)
                 - ui.get_article_offset_x();
             let x = ((ui.get_terminal_origin_x()
                 + left
@@ -196,6 +196,7 @@ pub fn start(
                 * dpi)
                 .round() as usize;
             let bottom = ((ui.get_terminal_origin_y()
+                + ui.get_article_top()
                 + (row + 1) as f32 * ui.get_article_line_height()
                 - ui.get_article_offset_y())
                 * dpi)
@@ -261,14 +262,15 @@ pub fn start(
             let model = ui.get_inline_pictures();
             let tile = model.row_data(0).ok_or("PNG widget missing")?;
             require(
-                (tile.x + tile.width / 2. - (ui.get_view_width() - 12.) / 2.).abs() < 0.5,
+                (tile.x + tile.width / 2. - ui.get_view_width() / 2.).abs() < 0.5,
                 "manually expanded PNG was not centered in the article",
             )?;
             let shot = ui.window().take_snapshot().map_err(|e| e.to_string())?;
             let dpi = ui.window().scale_factor();
             for (x, color) in [(16., [255, 0, 0, 255]), (48., [0, 0, 255, 255])] {
                 let sx = ((ui.get_terminal_origin_x() + tile.x + x) * dpi).round() as usize;
-                let sy = ((ui.get_terminal_origin_y() + tile.y + 16.) * dpi).round() as usize;
+                let sy = ((ui.get_terminal_origin_y() + ui.get_article_top() + tile.y + 16.) * dpi)
+                    .round() as usize;
                 let offset = (sy * shot.width() as usize + sx) * 4;
                 require(
                     offset + 4 <= shot.as_bytes().len()
@@ -346,7 +348,7 @@ pub fn start(
             };
             let position = slint::LogicalPosition::new(
                 ui.get_terminal_origin_x() + g.left / g.dpi + layout.logical_width() * 2. / 80.,
-                ui.get_terminal_origin_y() + layout.line_height() * 1.5,
+                ui.get_terminal_origin_y() + layout.top + layout.line_height() * 1.5,
             );
             click(&ui, position);
             wait(
@@ -632,7 +634,9 @@ async fn verify_keys(
             let dpi = ui.window().scale_factor();
             let x = ((ui.get_terminal_origin_x() + png.x + png.width * fraction) * dpi).round()
                 as usize;
-            let y = ((ui.get_terminal_origin_y() + png.y + png.height / 2.) * dpi).round() as usize;
+            let y = ((ui.get_terminal_origin_y() + ui.get_article_top() + png.y + png.height / 2.)
+                * dpi)
+                .round() as usize;
             let offset = (y * shot.width() as usize + x) * 4;
             require(
                 offset + 4 <= shot.as_bytes().len() && shot.as_bytes()[offset..offset + 4] == color,

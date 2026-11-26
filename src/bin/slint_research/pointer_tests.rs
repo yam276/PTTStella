@@ -197,6 +197,8 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
     let geometry = SurfaceGeometry::Article(ArticleGeometry {
         left: -10.,
         width: 700.,
+        height: 312.5,
+        top: 0.,
         body_height: 287.5,
         offset: 6256.25,
         whole_rows: None,
@@ -260,6 +262,8 @@ fn web_reading_home_and_end_take_the_top_row_and_footer_status_row() {
     let mut article = ArticleGeometry {
         left: -10.,
         width: 700.,
+        height: 312.5,
+        top: 0.,
         body_height: 287.5,
         offset: 6256.25,
         whole_rows: None,
@@ -308,6 +312,75 @@ fn web_reading_home_and_end_take_the_top_row_and_footer_status_row() {
 }
 
 #[test]
+fn web_reading_box_inset_matches_the_terminal_raster_and_its_black_bands() {
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 838;
+    // The terminal raster's box, centred 30 px down a 372.5 px view.
+    let article = ArticleGeometry {
+        left: -10.,
+        width: 700.,
+        height: 372.5,
+        top: 30.,
+        body_height: 287.5,
+        offset: 6256.25,
+        whole_rows: None,
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(837, 25, []).unwrap()),
+        line_width: 1000,
+        row: 25,
+        body_rows: 837,
+        dpi: 1.25,
+    };
+    let geometry = SurfaceGeometry::Article(article.clone());
+    assert!(geometry.cell((53., 29.9), &frame).is_none());
+    assert_eq!(
+        geometry.cell((53., 30.), &frame),
+        Some(Position { col: 5, row: 250 })
+    );
+    assert_eq!(
+        geometry.cell((53., 317.5), &frame),
+        Some(Position { col: 5, row: 837 })
+    );
+    assert!(geometry.cell((53., 342.5), &frame).is_none());
+    let span = |row| pttstella::selection::Span {
+        row,
+        start: 4,
+        end: 6,
+    };
+    assert_eq!(
+        geometry.span(&span(250), &frame),
+        Some(skia_safe::Rect::new(40., 30., 65., 48.75))
+    );
+    assert_eq!(
+        geometry.span(&span(837), &frame),
+        Some(skia_safe::Rect::new(40., 317.5, 65., 342.5))
+    );
+    let at = |point: (f32, f32)| {
+        let cell = geometry.cell(point, &frame);
+        crate::pointer::article_navigation(&article, point, cell)
+    };
+    for (y, expected) in [
+        // The view's own edge bands, then the terminal's margin pages.
+        (0., Intent::First),
+        (24.9, Intent::First),
+        (27., Intent::PreviousPage),
+        // The box: Home row, halves, footer End.
+        (30., Intent::First),
+        (54.9, Intent::First),
+        (55., Intent::PreviousPage),
+        (317.4, Intent::NextPage),
+        (317.5, Intent::Last),
+        (342.4, Intent::Last),
+        (342.5, Intent::NextPage),
+        (347.5, Intent::Last),
+        (372.4, Intent::Last),
+    ] {
+        assert_eq!(at((300., y)), Some(expected), "y={y}");
+    }
+    assert_eq!(at((53., 60.)), Some(Intent::Back));
+    assert_eq!(at((53., 27.)), Some(Intent::PreviousPage));
+}
+
+#[test]
 fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_height() {
     let mut frame = Screen::new(80, 24).unwrap().frame();
     frame.rows = 5;
@@ -315,6 +388,8 @@ fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_heigh
     let mut article = ArticleGeometry {
         left: 0.,
         width: 960.,
+        height: 124.,
+        top: 0.,
         body_height: 100.,
         offset: flow.top(1) as f64 - 12.,
         whole_rows: None,

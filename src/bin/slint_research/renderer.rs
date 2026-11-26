@@ -17,6 +17,9 @@ const CELL_WIDTH: f32 = 12.;
 const CELL_HEIGHT: f32 = 24.;
 const MAX_EDGE: f32 = 8192.;
 const MAX_PIXELS: f32 = (16 * 1024 * 1024) as f32;
+/// Grid size in multiples of one row height: 80 half-row-wide columns by 24 rows.
+const GRID_WIDTH: u32 = export::WIDTH / CELL_HEIGHT as u32;
+const GRID_HEIGHT: u32 = export::HEIGHT / CELL_HEIGHT as u32;
 const PALETTE: [Color; 16] = [
     Color::from_rgb(0, 0, 0),
     Color::from_rgb(128, 0, 0),
@@ -44,18 +47,27 @@ pub struct Size {
 
 impl Size {
     pub fn fit(view_width: f32, view_height: f32, dpi: f32, zoom: f32) -> Option<Self> {
-        let (w, h) = (export::WIDTH as f32, export::HEIGHT as f32);
-        let scale = ((view_width / w).min(view_height / h) * dpi * zoom)
+        let row = Self::row(view_width, view_height, dpi, zoom)?;
+        Some(Self {
+            width: row * GRID_WIDTH,
+            height: row * GRID_HEIGHT,
+        })
+    }
+
+    /// Whole-pixel row height of the 80x24 grid fitted to a view. The
+    /// terminal raster and web reading share it, so entering or leaving an
+    /// article neither rescales nor shifts the cells, and every row has the
+    /// same height.
+    pub fn row(view_width: f32, view_height: f32, dpi: f32, zoom: f32) -> Option<u32> {
+        let (w, h) = (GRID_WIDTH as f32, GRID_HEIGHT as f32);
+        let row = ((view_width / w).min(view_height / h) * dpi * zoom)
             .min(MAX_EDGE / w.max(h))
             .min((MAX_PIXELS / (w * h)).sqrt());
-        if view_width <= 0. || view_height <= 0. || !scale.is_finite() || scale <= 0. {
+        if view_width <= 0. || view_height <= 0. || !row.is_finite() || row <= 0. {
             return None;
         }
         // Flooring keeps the final allocation within the pixel budget.
-        Some(Self {
-            width: (w * scale).floor().max(1.) as u32,
-            height: (h * scale).floor().max(1.) as u32,
-        })
+        Some(row.floor().max(1.) as u32)
     }
 
     pub fn cell(self, col: usize, row: usize, span: usize, frame: &Frame) -> Rect {
@@ -669,5 +681,18 @@ mod tests {
         assert!(large.width * large.height <= 16 * 1024 * 1024);
         assert!(large.width <= 8192 && large.height <= 8192);
         assert_eq!(Size::fit(0., 600., 1., 1.), None);
+        // Uneven views keep whole, equal rows instead of a fractional scale.
+        for (w, h, dpi, zoom) in [
+            (1001., 599., 1., 1.),
+            (1470., 956., 2., 1.),
+            (1919., 1079., 1.25, 1.),
+        ] {
+            let size = Size::fit(w, h, dpi, zoom).unwrap();
+            let row = Size::row(w, h, dpi, zoom).unwrap();
+            assert_eq!((size.width, size.height), (row * 40, row * 24));
+            assert!(size.width as f32 <= w * dpi && size.height as f32 <= h * dpi);
+            assert!((row + 1) * 40 > (w * dpi) as u32 || (row + 1) * 24 > (h * dpi) as u32);
+        }
+        assert_eq!(Size::row(1920., 1080., 1., 1.), Some(45));
     }
 }

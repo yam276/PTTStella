@@ -33,7 +33,7 @@ pub fn start(
             let layout = owner.layout.get().ok_or("article layout missing")?;
             let point = slint::LogicalPosition::new(
                 ui.get_terminal_origin_x() + layout.view_width / 2.,
-                ui.get_terminal_origin_y() + layout.body_height / 2.,
+                ui.get_terminal_origin_y() + layout.top + layout.body_height / 2.,
             );
             ui.window().dispatch_event(Event::PointerScrolled {
                 position: point,
@@ -45,9 +45,10 @@ pub fn start(
                 "native wheel missed article body",
             )?;
             verification::key(&ui, Key::Home);
+            // The vertical bar overlays the view's right edge.
             let track = slint::LogicalPosition::new(
-                ui.get_terminal_origin_x() + layout.view_width + 6.,
-                ui.get_terminal_origin_y() + layout.body_height / 2.,
+                ui.get_terminal_origin_x() + layout.view_width - 6.,
+                ui.get_terminal_origin_y() + layout.top + layout.body_height / 2.,
             );
             verification::click(&ui, track, Button::Right);
             require(
@@ -65,7 +66,10 @@ pub fn start(
             .max(24.)
             .min(layout.body_height);
             let top = (layout.body_height - thumb) * before as f32 / layout.maximum() as f32;
-            let grab = slint::LogicalPosition::new(track.x, ui.get_terminal_origin_y() + top + 5.);
+            let grab = slint::LogicalPosition::new(
+                track.x,
+                ui.get_terminal_origin_y() + layout.top + top + 5.,
+            );
             ui.window().dispatch_event(Event::PointerPressed {
                 position: grab,
                 button: Button::Left,
@@ -89,26 +93,35 @@ pub fn start(
             )?;
             let held = owner.row_anchor();
             let top = (layout.body_height - thumb) * held as f32 / layout.maximum() as f32;
-            let held_position =
-                slint::LogicalPosition::new(track.x, ui.get_terminal_origin_y() + top + 5.);
+            let held_position = slint::LogicalPosition::new(
+                track.x,
+                ui.get_terminal_origin_y() + layout.top + top + 5.,
+            );
             ui.window().dispatch_event(Event::PointerPressed {
                 position: held_position,
                 button: Button::Left,
             });
+            // Shrink only the dimension that does not bind the row height, so
+            // the cell raster keeps its size while the geometry changes. A
+            // shrink also stays clear of the screen's own size limit.
             let size = ui.window().size();
             let dpi = ui.window().scale_factor();
+            let grow = if layout.view_width / 40. < layout.view_height / 24. {
+                (0., -4.)
+            } else {
+                (-4., 0.)
+            };
             ui.window().set_size(slint::LogicalSize::new(
-                size.width as f32 / dpi + 4.,
-                size.height as f32 / dpi,
+                size.width as f32 / dpi + grow.0,
+                size.height as f32 / dpi + grow.1,
             ));
             wait(
                 || {
-                    owner
-                        .layout
-                        .get()
-                        .is_some_and(|l| l.view_width > layout.view_width)
+                    owner.layout.get().is_some_and(|l| {
+                        l.view_width != layout.view_width || l.view_height != layout.view_height
+                    })
                 },
-                "width-only resize did not reach viewport",
+                "one-axis resize did not reach viewport",
             )
             .await?;
             require(
@@ -127,7 +140,7 @@ pub fn start(
             });
             require(
                 (owner.row_anchor() - held).abs() < 0.01,
-                "width-only resize retained old scrollbar grab",
+                "one-axis resize retained old scrollbar grab",
             )?;
             verification::key(&ui, Key::Home);
             let layout = owner.layout.get().ok_or("resized initial layout missing")?;
@@ -212,6 +225,11 @@ pub fn start(
                 "Up did not return to the preceding aligned row",
             )?;
             let anchor = owner.row_anchor();
+            // The body holds whole rows, so an aligned anchor sits on the
+            // buffered window's edge. Leave it first; a further fraction then
+            // stays inside the same row window.
+            ui.invoke_article_scroll(-0.3 * layout.line_height(), false);
+            tokio::time::sleep(Duration::from_millis(30)).await;
             let count = owner.raster_count.get();
             ui.invoke_article_scroll(-0.1 * layout.line_height(), false);
             tokio::time::sleep(Duration::from_millis(30)).await;
@@ -219,7 +237,7 @@ pub fn start(
                 owner.raster_count.get() == count,
                 "fractional scroll rebuilt unchanged row window",
             )?;
-            let anchor = anchor + 0.1;
+            let anchor = anchor + 0.4;
             for zoom in [1.25, 1.5] {
                 ui.set_zoom(zoom);
                 wait(
@@ -272,7 +290,11 @@ pub fn start(
             let resized = owner.layout.get().ok_or("resized layout missing")?;
             let horizontal = slint::LogicalPosition::new(
                 ui.get_terminal_origin_x() + resized.view_width * 0.9,
-                ui.get_terminal_origin_y() + resized.body_height + resized.line_height() + 6.,
+                ui.get_terminal_origin_y()
+                    + resized.top
+                    + resized.body_height
+                    + resized.line_height()
+                    + 6.,
             );
             verification::click(&ui, horizontal, Button::Left);
             require(
@@ -351,7 +373,8 @@ pub fn start(
                 - ui.get_article_offset_x())
                 * dpi)
                 .round() as usize;
-            let target_y = ((ui.get_terminal_origin_y() + last.body_height - last.line_height())
+            let target_y = ((ui.get_terminal_origin_y() + last.top + last.body_height
+                - last.line_height())
                 * dpi)
                 .round() as usize;
             let compare_width = (last.view_width * dpi).floor().min(512.) as usize;
