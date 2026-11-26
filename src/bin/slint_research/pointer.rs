@@ -209,11 +209,13 @@ impl Geometry {
 /// reader: the top band is Home across the whole row and the pinned source
 /// footer, the status row, is End, label included. Between them the left 17
 /// columns and margin go Back and the body splits into page halves. Black
-/// bands above and below the BBS box act as the terminal's do.
+/// bands above and below the BBS box act as the terminal's do. Columns come
+/// from x alone, so rows without text cells (the blank sides of an expanded
+/// image, partly hidden rows) navigate as the text rows beside them.
 pub fn article_navigation(
     geometry: &ArticleGeometry,
     point: (f32, f32),
-    cell: Option<Position>,
+    cols: usize,
 ) -> Option<Intent> {
     let (row, footer) = (geometry.row as f32, geometry.top + geometry.body_height);
     if point.1 < geometry.top || point.1 >= footer + row {
@@ -229,8 +231,13 @@ pub fn article_navigation(
         return Some(Intent::Last);
     }
     let zone = reading_zone(point.1, geometry.top, footer, row, geometry.dpi);
+    let column = Size {
+        width: geometry.line_width,
+        height: geometry.row,
+    }
+    .column(point.0 - geometry.left, cols);
     if zone != Some(Intent::First)
-        && (cell.is_some_and(|cell| cell.col < 17) || point.0 < geometry.left.max(0.))
+        && (column.is_some_and(|col| col < 17) || point.0 < geometry.left.max(0.))
     {
         return Some(Intent::Back);
     }

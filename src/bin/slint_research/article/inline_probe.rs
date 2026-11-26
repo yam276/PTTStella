@@ -265,6 +265,39 @@ pub fn start(
                 (tile.x + tile.width / 2. - ui.get_view_width() / 2.).abs() < 0.5,
                 "manually expanded PNG was not centered in the article",
             )?;
+            // The blank sides of an expanded image navigate as the text rows
+            // beside them (2026-11-26 report): Back within the left 17
+            // columns, page halves elsewhere. The gap still has no text cell.
+            let side_y =
+                ui.get_terminal_origin_y() + ui.get_article_top() + tile.y + tile.height / 2.;
+            let line = ui.get_article_line_width();
+            let text_left = ((ui.get_view_width() - line) / 2.).max(0.) - ui.get_article_offset_x();
+            for (x, back) in [
+                (text_left + line / 80. * 2.5, true),
+                (tile.x + tile.width + line / 80. * 2., false),
+            ] {
+                let position = slint::LogicalPosition::new(ui.get_terminal_origin_x() + x, side_y);
+                wait(
+                    || {
+                        ui.window().dispatch_event(Event::PointerMoved { position });
+                        let cursor = ui.get_pointer_cursor();
+                        if back {
+                            cursor == crate::PointerKind::Back
+                        } else {
+                            matches!(
+                                cursor,
+                                crate::PointerKind::PreviousPage | crate::PointerKind::NextPage
+                            )
+                        }
+                    },
+                    if back {
+                        "left side of an expanded image did not go Back"
+                    } else {
+                        "right side of an expanded image did not page"
+                    },
+                )
+                .await?;
+            }
             let shot = ui.window().take_snapshot().map_err(|e| e.to_string())?;
             let dpi = ui.window().scale_factor();
             for (x, color) in [(16., [255, 0, 0, 255]), (48., [0, 0, 255, 255])] {

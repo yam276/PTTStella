@@ -77,20 +77,21 @@ impl Size {
     }
 
     pub fn hit(self, x: f32, y: f32, frame: &Frame) -> Option<pttstella::selection::Position> {
-        if !x.is_finite()
-            || !y.is_finite()
-            || x < 0.
-            || y < 0.
-            || x >= self.width as f32
-            || y >= self.height as f32
-            || frame.cols == 0
-            || frame.rows == 0
-        {
+        if !y.is_finite() || y < 0. || y >= self.height as f32 || frame.rows == 0 {
             return None;
         }
-        let col = (1..=frame.cols).find(|&col| x < edge(col, frame.cols, self.width))? - 1;
+        let col = self.column(x, frame.cols)?;
         let row = (1..=frame.rows).find(|&row| y < edge(row, frame.rows, self.height))? - 1;
         Some(pttstella::selection::Position { col, row })
+    }
+
+    /// The column under `x`, with the same edges as `hit`, for rows that
+    /// have no text cell, such as the blank sides of an expanded image.
+    pub fn column(self, x: f32, cols: usize) -> Option<usize> {
+        if !x.is_finite() || x < 0. || x >= self.width as f32 || cols == 0 {
+            return None;
+        }
+        Some((1..=cols).find(|&col| x < edge(col, cols, self.width))? - 1)
     }
 }
 

@@ -274,8 +274,7 @@ fn web_reading_home_and_end_take_the_top_row_and_footer_status_row() {
         dpi: 1.25,
     };
     let at = |article: &ArticleGeometry, point: (f32, f32)| {
-        let cell = SurfaceGeometry::Article(article.clone()).cell(point, &frame);
-        crate::pointer::article_navigation(article, point, cell)
+        crate::pointer::article_navigation(article, point, frame.cols)
     };
     // As in the terminal: one 25 px Home row at the top of the 287.5 px
     // body, page halves below it and End on the pinned footer status row.
@@ -354,10 +353,7 @@ fn web_reading_box_inset_matches_the_terminal_raster_and_its_black_bands() {
         geometry.span(&span(837), &frame),
         Some(skia_safe::Rect::new(40., 317.5, 65., 342.5))
     );
-    let at = |point: (f32, f32)| {
-        let cell = geometry.cell(point, &frame);
-        crate::pointer::article_navigation(&article, point, cell)
-    };
+    let at = |point: (f32, f32)| crate::pointer::article_navigation(&article, point, frame.cols);
     for (y, expected) in [
         // The view's own edge bands, then the terminal's margin pages.
         (0., Intent::First),
@@ -431,4 +427,47 @@ fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_heigh
     let geometry = SurfaceGeometry::Article(article.clone());
     assert_eq!(geometry.cell((6., 50.), &frame), None);
     assert_eq!(geometry.span(&span, &frame), None);
+}
+
+#[test]
+fn blank_sides_of_an_expanded_image_navigate_like_the_rows_beside_them() {
+    // 2026-11-26 report: rows holding an open image ignored every click,
+    // even beside the picture. The picture keeps its own control; the gap
+    // still has no cell, but its blank sides page and go Back as text does.
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 5;
+    let article = ArticleGeometry {
+        left: 0.,
+        width: 960.,
+        height: 124.,
+        top: 0.,
+        body_height: 100.,
+        offset: 0.,
+        whole_rows: None,
+        // Row 0, a 48 px image gap at 24..72, then rows 1-3.
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(4, 24, [(0, 48)]).unwrap()),
+        line_width: 960,
+        row: 24,
+        body_rows: 4,
+        dpi: 1.,
+    };
+    let geometry = SurfaceGeometry::Article(article.clone());
+    let at = |point: (f32, f32)| crate::pointer::article_navigation(&article, point, frame.cols);
+    for y in [30., 60.] {
+        assert_eq!(geometry.cell((600., y), &frame), None, "gap y={y}");
+    }
+    // Columns are 12 px; the left 17 end at x = 204 in the gap as in text.
+    assert_eq!(at((600., 30.)), Some(Intent::PreviousPage));
+    assert_eq!(at((600., 60.)), Some(Intent::NextPage));
+    assert_eq!(at((100., 60.)), Some(Intent::Back));
+    assert_eq!(at((203.9, 60.)), Some(Intent::Back));
+    assert_eq!(at((204., 60.)), Some(Intent::NextPage));
+    assert_eq!(
+        geometry.cell((203.9, 80.), &frame),
+        Some(Position { col: 16, row: 1 })
+    );
+    assert_eq!(at((203.9, 80.)), Some(Intent::Back));
+    assert_eq!(at((204., 80.)), Some(Intent::NextPage));
+    // The top band stays Home across the whole row, gap or not.
+    assert_eq!(at((100., 10.)), Some(Intent::First));
 }

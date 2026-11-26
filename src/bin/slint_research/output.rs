@@ -594,15 +594,12 @@ impl Output {
                 self.can_navigate(ui),
             ),
             SurfaceGeometry::Article(g) => {
-                let local = point.1 - g.top;
-                if !geometry.contains(point)
-                    || (0. ..g.body_height).contains(&local)
-                        && g.flow.hit(g.offset + f64::from(local)).is_none()
-                {
-                    // Images have their own controls; a gap must not fall
-                    // through to text selection, Back or half-page navigation.
+                if !geometry.contains(point) {
                     return None;
                 }
+                // An image's own TouchArea takes clicks on the picture. Its
+                // gap has no text cell, so the blank sides never select or
+                // open links; they navigate as the text rows beside them do.
                 let cell = geometry.cell(point, frame);
                 if let Some(cell) = cell
                     && let Some(index) = projection
@@ -615,7 +612,7 @@ impl Output {
                 if !self.can_navigate(ui) {
                     return None;
                 }
-                pointer::article_navigation(g, point, cell).map(Hit::Navigate)
+                pointer::article_navigation(g, point, frame.cols).map(Hit::Navigate)
             }
         })
         .flatten()
