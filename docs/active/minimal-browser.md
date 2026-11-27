@@ -1,5 +1,13 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-27 PTT SSH 略過回覆前的視窗通知
+
+使用者回報 macOS 切到 PTT（SSH）後無法連線，WSS 正常。以本機 OpenSSH 9.9p2 sshd 重現（127.0.0.1、RSA 主機金鑰）：金鑰交換 mlkem768x25519-sha256／rsa-sha2-512 與 pty 請求成功，但 OpenSSH 啟動 shell 時先送 `CHANNEL_WINDOW_ADJUST`，再回 `CHANNEL_SUCCESS`。等待回覆只接受下一則訊息為 Success，把視窗通知當成拒絕，連線失敗並顯示「無法連線: SSH terminal request refused」。三次重跑結果相同。這是共用用戶端邏輯，不限 macOS。11-05 實站可到登入提示，PTT 站端目前的訊息順序未查證，一般測試不連 PTT。
+
+改為等待回覆時略過視窗調整與 xon-xoff 通知，其餘訊息仍視為拒絕，等待時間受 15 秒 dial 期限約束。新增合成 peer 測試：server 視窗 32 bytes，先收一筆資料觸發視窗調整，回覆 shell 前再送 xon-xoff；修正前失敗，修正後通過。修正版對同一 OpenSSH 完成 pty、shell、登入文字、原始 Big5 bytes 往返，關閉回報 TransportClosed。
+
+驗證：connection 單元測試 109 項（含 SSH 4 項）、bin 116 項通過，1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針都不經過 SSH，這次未跑。macOS 實站 SSH 登入提示待使用者確認。
+
 ## 2026-11-26 準備 0.5.1
 
 使用者要求發佈 0.5.1，內容為 0.5.0 之後的網頁閱讀與滑鼠修正，見 [發佈流程](../releases.md#051-發佈準備2026-11-26) 與 [v0.5.1 release notes](../release-notes/v0.5.1.md)。依 CONTRIBUTING，發佈 commit 上跑完整合成視窗探針組；結果見下方補記。

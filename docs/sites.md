@@ -26,4 +26,6 @@ Slint 合成站點表單可用 `PTTSTELLA_SLINT_SITE_SWITCH=same-endpoint pttste
 
 站點表單依面板內容區域配置，避免視窗較寬時裁掉表單兩側及「連線切換」。X11 重跑可設定 `PTTSTELLA_SLINT_SITE_SWITCH=native-same-endpoint` 和 `PTTSTELLA_SLINT_SETTINGS_PROBE=native-quit`，沿用同一組啟動參數。在站點表單保留位址，先選 GBK 並點「連線切換」，再選 Big5-UAO 並點同一按鈕，最後正常關窗。探針期待三次同位址連線、三次 Close 及零站端輸入。驗證使用本機合成站。
 
-SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。
+SSH 等待終端與 shell 請求的回覆時，略過 RFC 4254 允許先到的視窗調整與 xon-xoff 通知，其餘訊息視為拒絕。OpenSSH 啟動 shell 時會先擴大視窗，再回覆請求。
+
+SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、回覆前的視窗／流量通知、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。

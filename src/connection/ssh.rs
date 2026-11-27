@@ -106,15 +106,22 @@ async fn open(
     })
 }
 
+// RFC 4254 lets the peer send window and flow-control notices before a reply.
+// OpenSSH grows the session window when the shell starts, before replying.
+// The dial deadline bounds this wait.
 async fn request_accepted(channel: &mut Channel<client::Msg>) -> Result<(), russh::Error> {
-    if matches!(channel.wait().await, Some(ChannelMsg::Success)) {
-        Ok(())
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "SSH terminal request refused",
-        )
-        .into())
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Success) => return Ok(()),
+            Some(ChannelMsg::WindowAdjusted { .. } | ChannelMsg::XonXoff { .. }) => {}
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "SSH terminal request refused",
+                )
+                .into());
+            }
+        }
     }
 }
 
