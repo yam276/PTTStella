@@ -75,7 +75,22 @@ impl ArticleSession {
         {
             return None;
         }
-        (paint.input_epoch == view.input_epoch && !view.input_pending).then_some(id)
+        self.settled(paint.input_epoch, view).then_some(id)
+    }
+    /// A paint stays current until the station answers explicit input. In web
+    /// reading, the reader's own page request only appends to the cached
+    /// article, so gestures on it stay admitted while that one request issued
+    /// from this paint is pending; any other command still invalidates it.
+    /// 2026-11-27 report: long articles dropped every click while loading,
+    /// so Back needed a second click.
+    fn settled(&self, paint_epoch: u64, view: &View) -> bool {
+        if paint_epoch == view.input_epoch && !view.input_pending {
+            return true;
+        }
+        self.page_epoch.get() == Some(paint_epoch)
+            && (view.input_epoch == paint_epoch
+                || view.input_epoch == paint_epoch.saturating_add(1))
+            && self.ui.upgrade().is_some_and(|ui| ui.get_article_active())
     }
     /// Keep an already-admitted preview across geometry-only repainting. This
     /// does not authorize a new gesture or send: those require output_identity.
@@ -86,7 +101,7 @@ impl ArticleSession {
         let core = self.core.borrow();
         let id = Identity::of(core.last_displayed()?);
         let paint = core.current(id, view)?;
-        (paint.input_epoch == view.input_epoch && !view.input_pending).then_some(id)
+        self.settled(paint.input_epoch, view).then_some(id)
     }
     pub fn borrow_output(&self, view: &View) -> Option<Ref<'_, Paint>> {
         let id = self.output_identity(view)?;

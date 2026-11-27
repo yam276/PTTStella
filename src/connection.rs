@@ -551,6 +551,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// A slow page reply stays in flight while the reader clicks Back once.
+    pub fn start_article_back_load_probe(first: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(first, probe::Scenario::ArticleBackDuringLoad)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Explicit bounded local fixture for cancellable article preloading.
     pub fn start_article_load_probe(first: Vec<u8>, pages: Vec<Vec<u8>>) -> Result<Self, String> {
         Self::article_load_probe(first, pages, 500, 150)

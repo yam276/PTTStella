@@ -55,6 +55,7 @@ pub(super) enum Scenario {
         roles: bool,
     },
     ArticleStall,
+    ArticleBackDuringLoad,
     InlinePages {
         pages: Vec<Vec<u8>>,
         delay_ms: u64,
@@ -441,6 +442,52 @@ where
     }
     Ok(false)
 }
+/// 2026-11-27 report: leaving a long web-read article needed two Back clicks.
+/// The page request stays unanswered for 1.5 s; one Back click must reach the
+/// station as one Left, after the page reply in station order.
+async fn back_during_load<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let first = socket.next().await;
+    if !matches!(&first, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x1b[6~") {
+        return Err(format!(
+            "back-during-load probe expected one PageDown; received {first:?}"
+        ));
+    }
+    let early = tokio::select! {
+        _ = tokio::time::sleep(Duration::from_millis(1500)) => None,
+        incoming = socket.next() => Some(incoming),
+    };
+    socket
+        .send(Message::Binary(
+            crate::replay::full_load_page(2, Some("http://127.0.0.1:9"))?.into(),
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+    let back = match early {
+        Some(incoming) => incoming,
+        None => socket.next().await,
+    };
+    if !matches!(&back, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x1b[D") {
+        return Err(format!(
+            "back-during-load probe expected one Left; received {back:?}"
+        ));
+    }
+    socket
+        .send(Message::Binary(article_page("articles")?.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        other => Err(format!(
+            "back-during-load probe expected Close; received {other:?}"
+        )),
+    }
+}
+
 async fn articles<S>(
     socket: &mut tokio_tungstenite::WebSocketStream<S>,
     bookmarks: bool,
@@ -804,6 +851,7 @@ pub(super) async fn serve(
             | Scenario::PointerRows
             | Scenario::ListBoundary
             | Scenario::ArticleStall
+            | Scenario::ArticleBackDuringLoad
             | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
@@ -890,6 +938,9 @@ pub(super) async fn serve(
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
                 _=>Err("stalled article must not retry before Close".into()),
             };
+        }
+        if matches!(scenario, Scenario::ArticleBackDuringLoad) {
+            return back_during_load(&mut socket).await;
         }
         if let Scenario::InlinePages {pages,delay_ms,fragment_ms,native_input} = scenario {
             let started=std::time::Instant::now();

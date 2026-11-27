@@ -1,5 +1,13 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-27 長文載入中點一次返回即離開
+
+使用者回報有些文章用滑鼠點左側返回要按兩次才能離開（PTT 實站，滑鼠）。以合成探針重現：網頁閱讀的載入器送出下一頁後，站端回覆前 `input_pending` 為真，文章 output identity 因此失效，網頁閱讀上的點擊、游標與導覽全部被丟掉，沒有提示；長文載入時幾乎一直有下一頁在等回覆，所以第一下常被吃掉。即使點擊被接受，返回走站端導覽也會因「等待站端更新畫面」被拒絕。
+
+修正：文章 session 記下自己的頁面請求是從哪個輸入 epoch 的畫面送出；網頁閱讀時，若等待中的只有這一筆（epoch 只差一），output identity 與 `can_navigate` 照常放行，其他明確輸入仍讓點擊失效。網頁閱讀的滑鼠返回改走與鍵盤 ← 相同的文章輸入路徑，由 connection 排在頁面請求之後送出。新增 `--probe-article-back-load`：假站端扣住第一個 PageDown 的回覆 1.5 秒，探針須在這段期間看到返回游標、點一次左側，站端依序收到 PageDown 與 ←，回到文章列表；修改前此探針以「web reading ignored clicks while its page request was pending」失敗。
+
+驗證：bin 單元測試 116 項通過、1 項原有 ignored，connection 單元測試 109 項通過；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。依 CONTRIBUTING 只跑網頁閱讀相關的合成視窗探針，19 項全部通過：新的 back-load，以及文章輸入／輸出／全文／貼上／尋找、保活、長文、分段、換篇、停滯、文章視窗、右鍵選單、媒體、行內圖片、推文更新（append／mixed-append）、推文與 shell；純終端的探針未跑。合成探針用工具包事件，不是 OS 滑鼠。輸出在 `.local/verification/back-during-load/`，`before.log` 為修改前的失敗紀錄。PTT 實站長文的實際點擊尚待使用者確認。
+
 ## 2026-11-27 PTT SSH 略過回覆前的視窗通知
 
 使用者回報 macOS 切到 PTT（SSH）後無法連線，WSS 正常。以本機 OpenSSH 9.9p2 sshd 重現（127.0.0.1、RSA 主機金鑰）：金鑰交換 mlkem768x25519-sha256／rsa-sha2-512 與 pty 請求成功，但 OpenSSH 啟動 shell 時先送 `CHANNEL_WINDOW_ADJUST`，再回 `CHANNEL_SUCCESS`。等待回覆只接受下一則訊息為 Success，把視窗通知當成拒絕，連線失敗並顯示「無法連線: SSH terminal request refused」。三次重跑結果相同。這是共用用戶端邏輯，不限 macOS。11-05 實站可到登入提示，PTT 站端目前的訊息順序未查證，一般測試不連 PTT。

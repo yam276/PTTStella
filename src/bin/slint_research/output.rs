@@ -507,7 +507,13 @@ impl Output {
         let view = self.connection.updates.borrow();
         !ui.get_terminal_pointer_blocked()
             && view.phase == Phase::Connected
-            && !view.input_pending
+            // Web reading admits only its own pending page request.
+            && (!view.input_pending
+                || ui.get_article_active()
+                    && self
+                        .article
+                        .as_ref()
+                        .is_some_and(|a| a.output_identity(&view).is_some()))
             && !view.login_pending
             && view.mouse.route == pttstella::mouse::input::Route::Local
             && self.pending_navigation.get() != Some(view.stamp())
@@ -835,6 +841,15 @@ impl Output {
         {
             self.click_acted.set(true);
             if article.local_intent(intent) {
+                return;
+            }
+            if intent == Intent::Back {
+                // The keyboard's Left: queued behind the reader's own page
+                // request instead of refused while that page is on its way.
+                let generation = self.connection.updates.borrow().generation;
+                if let Err(error) = article.route_input(generation, b"\x1b[D".to_vec()) {
+                    crate::notice::error(ui, error);
+                }
                 return;
             }
             article.station_handoff();

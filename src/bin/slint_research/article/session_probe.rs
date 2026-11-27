@@ -90,6 +90,7 @@ pub fn start(
     let terminal = case == crate::session::Probe::ArticleTerminal;
     let long = case == crate::session::Probe::ArticleLong;
     let stall = case == crate::session::Probe::ArticleStall;
+    let back_load = case == crate::session::Probe::ArticleBackLoad;
     let input = case == crate::session::Probe::ArticleInput;
     Verification::start(
         ui,
@@ -434,6 +435,74 @@ pub fn start(
                     !ui.get_article_station(),
                     "explicit reading restore stayed in raw mode",
                 )?;
+            } else if back_load {
+                // 2026-11-27 report: some long articles needed two Back
+                // clicks. The station holds its reply to the preload PageDown
+                // while one click lands in web reading's Back zone.
+                use slint::platform::{PointerEventButton, WindowEvent};
+                // Web reading stays interactive while only its own page
+                // request is pending: the click must land before the reply.
+                let mut seen = (0, false, false);
+                let ready = wait(
+                    || {
+                        verification::foreground(&ui, true);
+                        seen = (
+                            owner.requests.get(),
+                            ui.get_article_active(),
+                            output.as_ref().is_some_and(|o| o.current(&ui).is_some()),
+                        );
+                        seen == (1, true, true) && connection.updates.borrow().input_pending
+                    },
+                    "",
+                )
+                .await;
+                ready.map_err(|_| {
+                    format!(
+                        "web reading ignored clicks while its page request was pending: requests, active, current = {seen:?}"
+                    )
+                })?;
+                let position = slint::LogicalPosition::new(
+                    ui.get_article_origin_x() + 4.,
+                    ui.get_article_origin_y()
+                        + ui.get_article_top()
+                        + ui.get_article_body_height() / 2.,
+                );
+                wait(
+                    || {
+                        ui.window()
+                            .dispatch_event(WindowEvent::PointerMoved { position });
+                        ui.get_pointer_cursor() == crate::PointerKind::Back
+                    },
+                    "web reading Back zone missing during the page load",
+                )
+                .await?;
+                let button = PointerEventButton::Left;
+                ui.set_native_pointer_buttons(1);
+                ui.set_native_pointer_down(true);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerPressed { position, button });
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                ui.set_native_pointer_buttons(0);
+                ui.set_native_pointer_down(false);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerReleased { position, button });
+                ui.window().dispatch_event(WindowEvent::PointerExited);
+                wait(
+                    || {
+                        verification::foreground(&ui, true);
+                        matches!(
+                            connection.updates.borrow().context(),
+                            Context::ArticleList { .. }
+                        )
+                    },
+                    "one mouse Back during a page load did not leave the article",
+                )
+                .await?;
+                require(
+                    !ui.get_article_active(),
+                    "the article list still showed web reading",
+                )?;
+                verification::capture(&ui, &directory, "back-during-load.png")?;
             } else if stall {
                 let started = std::time::Instant::now();
                 wait(

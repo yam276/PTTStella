@@ -62,6 +62,7 @@ pub enum Probe {
     ArticleSwitch,
     ArticleSwitchTerminal,
     ArticleStall,
+    ArticleBackLoad,
     ArticleTerminal,
     Input,
     Clipboard,
@@ -254,6 +255,7 @@ pub fn with_probe(
         Probe::ArticleSwitch => "slint_article_switch",
         Probe::ArticleSwitchTerminal => "slint_terminal_switch",
         Probe::ArticleStall => "slint_stalled_article",
+        Probe::ArticleBackLoad => "slint_article_back_load",
         Probe::ArticleTerminal => "slint_terminal_pages",
         Probe::Input => "slint_input",
         Probe::Clipboard => "slint_clipboard",
@@ -438,6 +440,9 @@ pub fn with_probe(
                 vec![pttstella::replay::native_article_output_page(2)?],
             ),
             Probe::ArticleStall => Connection::start_article_stall_probe(
+                pttstella::replay::full_load_page(1, Some("http://127.0.0.1:9"))?,
+            ),
+            Probe::ArticleBackLoad => Connection::start_article_back_load_probe(
                 pttstella::replay::full_load_page(1, Some("http://127.0.0.1:9"))?,
             ),
             Probe::ArticleTerminal => Connection::start_inline_pages_probe(
