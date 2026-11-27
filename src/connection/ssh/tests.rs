@@ -152,7 +152,7 @@ async fn serve<H: server::Handler<Error = russh::Error> + Send + 'static>(
     let task = tokio::spawn(async move {
         let (stream, _) = listener.accept().await?;
         let config = server::Config {
-            keys: vec![key],
+            keys: [vec![key], config.keys.clone()].concat(),
             ..config
         };
         server::run_stream(Arc::new(config), stream, handler)
@@ -181,7 +181,9 @@ async fn fixture() -> (
 async fn pinned_ssh_negotiates_bbs_terminal_and_transports_unmodified_bytes() {
     timeout(Duration::from_secs(5), async {
         let (address, key, stage, peer) = fixture().await;
-        let ssh = open(address, &key, ALGORITHMS).await.unwrap();
+        let ssh = open(address, &["SHA256:unrelated", &key], ALGORITHMS)
+            .await
+            .unwrap();
         let mut socket = super::super::Socket::Ssh(Box::new(ssh));
         assert!(!socket.uses_telnet_framing());
         assert_eq!(socket.next().await.unwrap().unwrap().into_data(), DATA);
@@ -209,7 +211,7 @@ async fn changed_ssh_host_key_is_rejected_before_authentication() {
     timeout(Duration::from_secs(5), async {
         let (address, _, stage, peer) = fixture().await;
         assert_eq!(
-            open(address, PTT_FINGERPRINT, ALGORITHMS)
+            open(address, PTT_FINGERPRINTS, ALGORITHMS)
                 .await
                 .err()
                 .unwrap(),
@@ -227,7 +229,7 @@ async fn aborting_ssh_key_exchange_closes_the_underlying_tcp_connection() {
     timeout(Duration::from_secs(5), async {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let address = listener.local_addr().unwrap();
-        let dial = tokio::spawn(open(address, PTT_FINGERPRINT, ALGORITHMS));
+        let dial = tokio::spawn(open(address, PTT_FINGERPRINTS, ALGORITHMS));
         let mut peer = BufReader::new(listener.accept().await.unwrap().0);
         let mut greeting = String::new();
         peer.read_line(&mut greeting).await.unwrap();
@@ -266,7 +268,7 @@ async fn ssh_request_reply_follows_window_and_flow_control_notices() {
             ..client::Config::default()
         };
         let tcp = TcpStream::connect(address).await.unwrap();
-        let mut session = client::connect_stream(Arc::new(config), tcp, HostKey(key))
+        let mut session = client::connect_stream(Arc::new(config), tcp, HostKey(vec![key]))
             .await
             .unwrap();
         assert!(session.authenticate_none("bbs").await.unwrap().success());
@@ -277,6 +279,36 @@ async fn ssh_request_reply_follows_window_and_flow_control_notices() {
         request_accepted(&mut channel).await.unwrap();
         assert!(grown.await.unwrap());
         drop((channel, session));
+        let _ = peer.await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn ptt_key_algorithms_negotiate_the_current_ptt_host_key_offer() {
+    timeout(Duration::from_secs(5), async {
+        // PTT now offers ssh-ed25519, ecdsa-sha2-nistp256 and SHA-1 ssh-rsa.
+        let ecdsa = PrivateKey::random(
+            &mut russh::keys::key::safe_rng(),
+            Algorithm::Ecdsa {
+                curve: russh::keys::EcdsaCurve::NistP256,
+            },
+        )
+        .unwrap();
+        let config = server::Config {
+            keys: vec![ecdsa],
+            ..server::Config::default()
+        };
+        let (address, _, peer) = serve(Peer::default(), config).await;
+        // Negotiation reaches the pin check, which rejects the synthetic key.
+        assert_eq!(
+            open(address, PTT_FINGERPRINTS, PTT_KEY_ALGORITHMS)
+                .await
+                .err()
+                .unwrap(),
+            crate::msg!("site-ssh-host-key")
+        );
         let _ = peer.await;
     })
     .await
