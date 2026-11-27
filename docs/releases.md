@@ -180,6 +180,8 @@ Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [
 
 ## 0.5.1 發佈準備（2026-11-26）
 
-使用者要求發佈 0.5.1。`develop` 自 0.5.0 起只有修正與文件：網頁閱讀與終端共用 BBS 框（`36336d5`）、閱讀首尾改為最上一列與頁尾狀態列（`62a4a64`）、按住時的導覽游標（`9841542`）、展開圖片兩側可導覽（`4dcb213`）、移除底部網址列（`35ed3b0`），以及 Windows 安裝說明、AGENTS.md 與 CONTRIBUTING 的文件更新。`Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.1`，新增 [v0.5.1 release notes](release-notes/v0.5.1.md)。
+使用者要求發佈 0.5.1。`develop` 自 0.5.0 起只有修正與文件：網頁閱讀與終端共用 BBS 框（`36336d5`）、閱讀首尾改為最上一列與頁尾狀態列（`62a4a64`）、按住時的導覽游標（`9841542`）、展開圖片兩側可導覽（`4dcb213`）、移除底部網址列（`35ed3b0`）、PTT SSH 等待回覆時略過視窗通知（`58f2528`），以及 Windows 安裝說明、AGENTS.md 與 CONTRIBUTING 的文件更新。`Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.1`，新增 [v0.5.1 release notes](release-notes/v0.5.1.md)。
 
 macOS arm64 實機已安裝並使用過同一批修正的本機測試版（`ec9136d`，0.6.0-dev.1）。Windows、Intel Mac 與 Linux 的實機驗收仍未執行，與 0.5.0 相同。
+
+2026-11-27 使用者要求將 PTT SSH 修正（`58f2528`）併入 0.5.1。這項修正只以本機 OpenSSH 9.9p2 重現及合成測試驗證，PTT 實站尚未測試；上述 `ec9136d` 測試版也不包含這項修正。
