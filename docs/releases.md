@@ -184,4 +184,4 @@ Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [
 
 macOS arm64 實機已安裝並使用過同一批修正的本機測試版（`ec9136d`，0.6.0-dev.1）。Windows、Intel Mac 與 Linux 的實機驗收仍未執行，與 0.5.0 相同。
 
-2026-11-27 使用者要求將 PTT SSH 修正（`58f2528`）併入 0.5.1。這項修正只以本機 OpenSSH 9.9p2 重現及合成測試驗證，PTT 實站尚未測試；上述 `ec9136d` 測試版也不包含這項修正。使用者以 `0f2e05c` 測試版實測後，發現 PTT 實際的失敗是主機金鑰演算法不相容（「No common Key algorithm」），因此再改為 Ed25519 優先並固定 SSHFP 公布的指紋。這項修正的 PTT 實站結果待使用者確認。
+2026-11-27 使用者要求將 PTT SSH 修正（`58f2528`）併入 0.5.1。這項修正只以本機 OpenSSH 9.9p2 重現及合成測試驗證，PTT 實站尚未測試；上述 `ec9136d` 測試版也不包含這項修正。使用者以 `0f2e05c` 測試版實測後，發現 PTT 實際的失敗是主機金鑰演算法不相容（「No common Key algorithm」），因此再改為 Ed25519 優先並固定 SSHFP 公布的指紋。使用者以 `d36a421` 測試版在 macOS arm64 實測 PTT（SSH），回報可以連線。

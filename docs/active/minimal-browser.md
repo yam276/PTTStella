@@ -14,7 +14,7 @@
 
 站方公告只列 RSA 指紋，並說明現行指紋登載於 DNS SSHFP。2026-11-27 以系統 resolver 和 8.8.8.8 查詢 `ptt.cc` SSHFP，結果一致：RSA SHA-256 與公告相同，Ed25519 為 `SHA256:oTf7wY7klc9gi0FHhYQNHQu7aJfYGz/bFLSpdOxhbxg`。`ptt.cc` 沒有 DNSSEC。演算法改為 Ed25519 優先、RSA-SHA2 次之，指紋寫死為 Ed25519 與 RSA 兩筆，不接受 SHA-1 的 `ssh-rsa`。新增測試讓合成 server 只提供 Ed25519／ECDSA P-256，正式演算法清單須通過協商並到達指紋核對；修正前以同樣的「No common Key algorithm」失敗，修正後通過。
 
-驗證：connection 單元測試 110 項（含 SSH 5 項）、bin 116 項通過，1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針都不經過 SSH，未跑。PTT 實站登入提示待使用者用新測試版確認。
+驗證：connection 單元測試 110 項（含 SSH 5 項）、bin 116 項通過，1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針都不經過 SSH，未跑。使用者以 `d36a421` 測試版（macOS arm64）實測 PTT（SSH），回報可以連線。Windows、Linux 與 Intel Mac 未實測。
 
 ## 2026-11-27 PTT SSH 略過回覆前的視窗通知
 
