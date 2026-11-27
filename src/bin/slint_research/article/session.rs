@@ -84,6 +84,8 @@ pub struct ArticleSession {
     destination_wait: RefCell<Option<DestinationWait>>,
     cancellation: RefCell<Option<NavigationCancellation>>,
     busy: Cell<bool>,
+    /// Input epoch of the paint the reader's own page request was sent from.
+    page_epoch: Cell<Option<u64>>,
     edge_fetch: RefCell<Option<EdgeFetch>>,
     adjacent_request: Cell<Option<navigation::Stamp>>,
     serial: Cell<u64>,
@@ -161,6 +163,7 @@ impl ArticleSession {
             destination_wait: RefCell::new(None),
             cancellation: RefCell::new(None),
             busy: Cell::new(false),
+            page_epoch: Cell::new(None),
             edge_fetch: RefCell::new(None),
             adjacent_request: Cell::new(None),
             serial: Cell::new(0),
@@ -351,7 +354,9 @@ impl ArticleSession {
     }
 
     fn request_page(&self, view: &View, intent: Intent) -> Result<(), String> {
-        self.request_navigation(view, intent, navigation::Source::Button)
+        self.request_navigation(view, intent, navigation::Source::Button)?;
+        self.page_epoch.set(Some(view.input_epoch));
+        Ok(())
     }
 
     fn request_navigation(
@@ -360,6 +365,7 @@ impl ArticleSession {
         intent: Intent,
         source: navigation::Source,
     ) -> Result<(), String> {
+        self.page_epoch.set(None);
         let (reply, cancellation) =
             self.connection
                 .request_cancellable_navigate(view.stamp(), intent, source)?;
@@ -400,6 +406,7 @@ impl ArticleSession {
     }
 
     fn page_failed(&self, error: String) {
+        self.page_epoch.set(None);
         self.clear_edge_fetch();
         self.core.borrow_mut().stop_full_load();
         self.notice(error);
@@ -1013,6 +1020,7 @@ impl ArticleSession {
         result
     }
     fn cancel_command(&self) {
+        self.page_epoch.set(None);
         self.clear_edge_fetch();
         self.adjacent_request.set(None);
         if let Some(cancel) = self.cancellation.take() {

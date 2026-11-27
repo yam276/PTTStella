@@ -439,7 +439,7 @@ pub fn start(
                         .ok_or("unopened focus image missing")?;
                     let p = slint::LogicalPosition::new(
                         ui.get_terminal_origin_x() + a.x + a.size / 2.,
-                        ui.get_terminal_origin_y() + a.y + a.size / 2.,
+                        ui.get_terminal_origin_y() + ui.get_article_top() + a.y + a.size / 2.,
                     );
                     pointer_checkpoint(&ui, &o, "before-inline", p);
                     verification::click(&ui, p, Button::Left);

@@ -184,7 +184,9 @@ pub fn start(
                 if case == "current" {
                     let point = slint::LogicalPosition::new(
                         ui.get_terminal_origin_x() + ui.get_view_width() * 0.7,
-                        ui.get_terminal_origin_y() + ui.get_article_line_height() * 9.5,
+                        ui.get_terminal_origin_y()
+                            + ui.get_article_top()
+                            + ui.get_article_line_height() * 9.5,
                     );
                     open_context_action(&ui, point, msg!("bookmarks-current")).await?;
                 } else if case == "headerless" {

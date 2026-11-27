@@ -507,7 +507,13 @@ impl Output {
         let view = self.connection.updates.borrow();
         !ui.get_terminal_pointer_blocked()
             && view.phase == Phase::Connected
-            && !view.input_pending
+            // Web reading admits only its own pending page request.
+            && (!view.input_pending
+                || ui.get_article_active()
+                    && self
+                        .article
+                        .as_ref()
+                        .is_some_and(|a| a.output_identity(&view).is_some()))
             && !view.login_pending
             && view.mouse.route == pttstella::mouse::input::Route::Local
             && self.pending_navigation.get() != Some(view.stamp())
@@ -594,14 +600,12 @@ impl Output {
                 self.can_navigate(ui),
             ),
             SurfaceGeometry::Article(g) => {
-                if !geometry.contains(point)
-                    || point.1 < g.body_height
-                        && g.flow.hit(g.offset + f64::from(point.1)).is_none()
-                {
-                    // Images have their own controls; a gap must not fall
-                    // through to text selection, Back or half-page navigation.
+                if !geometry.contains(point) {
                     return None;
                 }
+                // An image's own TouchArea takes clicks on the picture. Its
+                // gap has no text cell, so the blank sides never select or
+                // open links; they navigate as the text rows beside them do.
                 let cell = geometry.cell(point, frame);
                 if let Some(cell) = cell
                     && let Some(index) = projection
@@ -614,7 +618,7 @@ impl Output {
                 if !self.can_navigate(ui) {
                     return None;
                 }
-                pointer::article_navigation(g, point, cell).map(Hit::Navigate)
+                pointer::article_navigation(g, point, frame.cols).map(Hit::Navigate)
             }
         })
         .flatten()
@@ -735,8 +739,9 @@ impl Output {
     }
     /// Slint reads `mouse-cursor` before `pointer-event` reaches this hit test
     /// and applies it only while dispatching pointer input. Replay the latest
-    /// real window position once after the hit changed; both surfaces ignore
-    /// the replay, so no hover, station or selection state changes.
+    /// real window position once after the hit or the text-selection cursor
+    /// changed; both surfaces ignore the replay, so no hover, station or
+    /// selection state changes.
     fn refresh_pointer_cursor(&self, ui: &TerminalWindow) {
         if !ui.global::<crate::PointerRefresh>().get_inside() || self.cursor_refresh.replace(true) {
             return;
@@ -756,6 +761,10 @@ impl Output {
             ui.window()
                 .dispatch_event(slint::platform::WindowEvent::PointerMoved { position });
             refresh.set_replaying(false);
+            // The winit backend installs a custom cursor only at the start of
+            // its next window event. Without one the pending arrow waited for
+            // the press, and macOS showed the system arrow while it was held.
+            ui.window().request_redraw();
         });
     }
     fn hover_overlay(&self, ui: &TerminalWindow) {
@@ -800,17 +809,6 @@ impl Output {
             ui.set_pointer_cursor(cursor);
             self.refresh_pointer_cursor(ui);
         }
-        ui.set_pointer_url(match hit {
-            Some(Hit::Link(index)) => self
-                .projection
-                .borrow()
-                .as_ref()
-                .and_then(|p| p.links.get(index))
-                .map(|l| l.url.clone())
-                .unwrap_or_default()
-                .into(),
-            _ => "".into(),
-        });
         if let (Some(Hit::Navigate(Intent::Open { row })), Some(size)) = (hit, self.size.get()) {
             let frame = self.renderer.borrow();
             let dpi = ui.window().scale_factor();
@@ -843,6 +841,15 @@ impl Output {
         {
             self.click_acted.set(true);
             if article.local_intent(intent) {
+                return;
+            }
+            if intent == Intent::Back {
+                // The keyboard's Left: queued behind the reader's own page
+                // request instead of refused while that page is on its way.
+                let generation = self.connection.updates.borrow().generation;
+                if let Err(error) = article.route_input(generation, b"\x1b[D".to_vec()) {
+                    crate::notice::error(ui, error);
+                }
                 return;
             }
             article.station_handoff();
@@ -982,8 +989,14 @@ impl Output {
                 .is_some_and(|(_, text)| text.rows.len() <= export::ROWS),
         );
         ui.set_selection_dragging(selected.gesture.is_some());
-        ui.set_selection_cursor(selected.text_cursor());
+        let text_cursor = selected.text_cursor();
         drop(selected);
+        // Slint already read the cursor for this event; a drag that starts or
+        // ends a text selection shows its cursor without waiting for a move.
+        if ui.get_selection_cursor() != text_cursor {
+            ui.set_selection_cursor(text_cursor);
+            self.refresh_pointer_cursor(ui);
+        }
         ui.invoke_context_updated();
         ui.invoke_station_color_updated();
         ui.invoke_keep_alive_changed();

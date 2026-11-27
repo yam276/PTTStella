@@ -248,6 +248,7 @@ pub(super) async fn run(
         let point = slint::LogicalPosition::new(
             ui.get_terminal_origin_x() + g.left / g.dpi + 0.95 * g.line_width as f32 / g.dpi,
             ui.get_terminal_origin_y()
+                + g.top / g.dpi
                 + ((g.flow.top(0) as f64 - g.offset) / f64::from(g.dpi)) as f32
                 + g.row as f32 / 2. / g.dpi,
         );
@@ -321,7 +322,7 @@ async fn all_from_zero(
     };
     let point = slint::LogicalPosition::new(
         ui.get_terminal_origin_x() + g.left / g.dpi + 2. * g.line_width as f32 / 80. / g.dpi,
-        ui.get_terminal_origin_y() + g.row as f32 / 2. / g.dpi,
+        ui.get_terminal_origin_y() + (g.top + g.row as f32 / 2.) / g.dpi,
     );
     ui.window().dispatch_event(Event::KeyPressed {
         text: Key::Shift.into(),
@@ -361,7 +362,8 @@ async fn all_from_zero(
     for (x, color) in [(16., [255, 0, 0, 255]), (48., [0, 0, 255, 255])] {
         let dpi = ui.window().scale_factor();
         let sx = ((ui.get_terminal_origin_x() + p.x + x) * dpi).round() as usize;
-        let sy = ((ui.get_terminal_origin_y() + p.y + 16.) * dpi).round() as usize;
+        let sy = ((ui.get_terminal_origin_y() + ui.get_article_top() + p.y + 16.) * dpi).round()
+            as usize;
         let offset = (sy * shot.width() as usize + sx) * 4;
         require(
             offset + 4 <= shot.as_bytes().len() && shot.as_bytes()[offset..offset + 4] == color,

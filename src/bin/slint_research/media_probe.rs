@@ -271,9 +271,8 @@ pub fn start(
                 "disabled hover downloaded a new image",
             )?;
             require(
-                !ui.get_pointer_url().is_empty()
-                    && ui.get_pointer_cursor() == crate::PointerKind::Action,
-                "disabled media hover removed ordinary link hints",
+                ui.get_pointer_cursor() == crate::PointerKind::Action,
+                "disabled media hover removed the link cursor",
             )?;
             preference(&ui, 1).await?;
             moved(&ui, png);

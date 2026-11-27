@@ -169,3 +169,19 @@ Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [
 使用者要求準備 0.5.0。先把 `main` 合併回 `develop`（`53f499d`），帶入 v0.4.2 release notes，以及 `release.py` 允許 `dioxus` 分支開 Release PR 與手動驗證的修改；`develop` 保留 `0.5.0-dev.3`，避免 Release PR 把版號帶回 `0.4.2`。接著把 `Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.0`，README 的 Windows 列改為免裝 WebView2 的 Setup／portable ZIP，Linux 列註明影片需要 `libmpv2`，[Windows 安裝說明](windows-installer.md) 改以 0.5.0 為主、0.4.2 及更早的 Dioxus 說明移到獨立段落，並新增 [v0.5.0 release notes](release-notes/v0.5.0.md)。
 
 截至準備時仍未人工驗收：Windows 實機覆蓋 0.4.2 Setup 安裝、沒有 WebView2 時啟動、輸入法與認證管理員密碼沿用；macOS 以正式資料從 0.4.x 升級、退回 0.4.2 與 Gatekeeper 隔離下載；Intel Mac 與 Linux 實機啟動及影片。Release PR 合併前由使用者決定是否先補這些驗收。
+
+## 0.5.0 發佈結果（2026-11-23）
+
+使用者在上述實機驗收完成前明確要求合併。Release PR [#12](https://github.com/yam276/PTTStella/pull/12) 的 Release PR policy 與 [verify run 45166309720](https://github.com/yam276/PTTStella/actions/runs/45166309720)（`751ad47`，四平台）通過後，以一般 merge commit `df6f0835fdff2de058d3c91ef9f549d70edce83e` 合併，其 Git tree 與 `751ad47` 相同。正式 [45172233180](https://github.com/yam276/PTTStella/actions/runs/45172233180) 通過來源驗證、四平台打包與發佈，建立指向該合併提交的 `v0.5.0` tag 及 Latest Release，公開 Windows Setup／portable ZIP、兩個 macOS 的 DMG／ZIP、Linux DEB／tar.gz、各平台 `-sources.tar` 與 `SHA256SUMS`；`SHA256SUMS` 與 GitHub 記錄的 12 個 asset digest 一致。
+
+發佈後依使用者要求在說明補上效能比較：先更新 [v0.5.0 release notes](release-notes/v0.5.0.md)，再以 `gh release edit` 把同一份文字寫入已公開的 Release，tag 與下載檔不變。效能表沿用 Slint 評估期間在 Apple Silicon Mac 的同負載量測，Windows、Intel Mac、Linux 與實站仍未量測。
+
+`main` 隨後快轉合併回 `develop`，`develop` 改為 `0.6.0-dev.1`，此提交不合併回 `main`。上一節列出的 Windows、macOS 升級／回退、Intel Mac 與 Linux 實機驗收仍未執行。
+
+## 0.5.1 發佈準備（2026-11-26）
+
+使用者要求發佈 0.5.1。`develop` 自 0.5.0 起只有修正與文件：網頁閱讀與終端共用 BBS 框（`36336d5`）、閱讀首尾改為最上一列與頁尾狀態列（`62a4a64`）、按住時的導覽游標（`9841542`）、展開圖片兩側可導覽（`4dcb213`）、移除底部網址列（`35ed3b0`）、長文載入中網頁閱讀仍接受點擊且返回一次即離開、PTT SSH 等待回覆時略過視窗通知（`58f2528`）與改用 Ed25519 主機金鑰，以及 Windows 安裝說明、AGENTS.md 與 CONTRIBUTING 的文件更新。`Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.1`，新增 [v0.5.1 release notes](release-notes/v0.5.1.md)。
+
+macOS arm64 實機已安裝並使用過同一批修正的本機測試版（`ec9136d`，0.6.0-dev.1）。Windows、Intel Mac 與 Linux 的實機驗收仍未執行，與 0.5.0 相同。
+
+2026-11-27 使用者要求將 PTT SSH 修正（`58f2528`）併入 0.5.1。這項修正只以本機 OpenSSH 9.9p2 重現及合成測試驗證，PTT 實站尚未測試；上述 `ec9136d` 測試版也不包含這項修正。使用者以 `0f2e05c` 測試版實測後，發現 PTT 實際的失敗是主機金鑰演算法不相容（「No common Key algorithm」），因此再改為 Ed25519 優先並固定 SSHFP 公布的指紋。使用者以 `d36a421` 測試版在 macOS arm64 實測 PTT（SSH），回報可以連線。

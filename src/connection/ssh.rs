@@ -13,10 +13,25 @@ use tokio_tungstenite::tungstenite::{Error, Message};
 
 use super::CloseOutcome;
 
-// Published by PTT in its 2024 RSA key rotation announcement.
-const PTT_FINGERPRINT: &str = "SHA256:9/gkjxWjuteMj//K0sRo1gj7h5qTp0HPIH3n7+e3Jqc";
+// PTT's 2024 RSA rotation announcement publishes the RSA fingerprint and
+// points to the DNS SSHFP records for the current keys. The Ed25519 pin comes
+// from those records, whose RSA entry matches the announcement. PTT may offer
+// RSA only with SHA-1 signatures, so prefer Ed25519 and never accept ssh-rsa.
+const PTT_FINGERPRINTS: &[&str] = &[
+    "SHA256:oTf7wY7klc9gi0FHhYQNHQu7aJfYGz/bFLSpdOxhbxg",
+    "SHA256:9/gkjxWjuteMj//K0sRo1gj7h5qTp0HPIH3n7+e3Jqc",
+];
+const PTT_KEY_ALGORITHMS: &[Algorithm] = &[
+    Algorithm::Ed25519,
+    Algorithm::Rsa {
+        hash: Some(HashAlg::Sha512),
+    },
+    Algorithm::Rsa {
+        hash: Some(HashAlg::Sha256),
+    },
+];
 
-struct HostKey(String);
+struct HostKey(Vec<String>);
 impl client::Handler for HostKey {
     type Error = russh::Error;
 
@@ -25,7 +40,7 @@ impl client::Handler for HostKey {
         key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
         Ok(matches!(key, PublicKeyOrCertificate::PublicKey { key, .. }
-            if key.fingerprint(HashAlg::Sha256).to_string() == self.0))
+            if self.0.contains(&key.fingerprint(HashAlg::Sha256).to_string())))
     }
 }
 
@@ -47,20 +62,12 @@ pub(super) struct Ssh {
 }
 
 pub(super) async fn connect() -> Result<Ssh, String> {
-    const KEY_ALGORITHMS: &[Algorithm] = &[
-        Algorithm::Rsa {
-            hash: Some(HashAlg::Sha512),
-        },
-        Algorithm::Rsa {
-            hash: Some(HashAlg::Sha256),
-        },
-    ];
-    open(("ptt.cc", 22), PTT_FINGERPRINT, KEY_ALGORITHMS).await
+    open(("ptt.cc", 22), PTT_FINGERPRINTS, PTT_KEY_ALGORITHMS).await
 }
 
 async fn open(
     address: impl ToSocketAddrs,
-    fingerprint: &str,
+    fingerprints: &[&str],
     key_algorithms: &'static [Algorithm],
 ) -> Result<Ssh, String> {
     timeout(Duration::from_secs(15), async {
@@ -79,7 +86,7 @@ async fn open(
         let mut session = client::connect_stream(
             Arc::new(config),
             TcpStream::from_std(tcp)?,
-            HostKey(fingerprint.into()),
+            HostKey(fingerprints.iter().map(|f| f.to_string()).collect()),
         )
         .await?;
         if !session.authenticate_none("bbs").await?.success() {
@@ -106,15 +113,22 @@ async fn open(
     })
 }
 
+// RFC 4254 lets the peer send window and flow-control notices before a reply.
+// OpenSSH grows the session window when the shell starts, before replying.
+// The dial deadline bounds this wait.
 async fn request_accepted(channel: &mut Channel<client::Msg>) -> Result<(), russh::Error> {
-    if matches!(channel.wait().await, Some(ChannelMsg::Success)) {
-        Ok(())
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "SSH terminal request refused",
-        )
-        .into())
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Success) => return Ok(()),
+            Some(ChannelMsg::WindowAdjusted { .. } | ChannelMsg::XonXoff { .. }) => {}
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "SSH terminal request refused",
+                )
+                .into());
+            }
+        }
     }
 }
 

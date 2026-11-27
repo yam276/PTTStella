@@ -45,12 +45,17 @@ fn row_open_back_and_headers_follow_the_original_profiles() {
         ("boards_caption", 10, 6, Some(Intent::Open { row: 6 })),
         ("main_menu", 19, 13, None),
         ("main_menu", 20, 13, Some(Intent::Open { row: 13 })),
-        ("reading_middle", 1, 0, Some(Intent::Back)),
+        // The reader's top row is Home across its width, Back included, and
+        // the footer status row is End from its left label on.
+        ("reading_middle", 1, 0, Some(Intent::First)),
         ("reading_middle", 30, 0, Some(Intent::First)),
+        ("reading_middle", 1, 1, Some(Intent::Back)),
         ("reading_middle", 30, 6, Some(Intent::PreviousPage)),
         ("reading_middle", 30, 16, Some(Intent::NextPage)),
-        ("reading_middle", 30, 22, Some(Intent::Last)),
-        ("reading_middle", 30, 23, None),
+        ("reading_middle", 1, 22, Some(Intent::Back)),
+        ("reading_middle", 30, 22, Some(Intent::NextPage)),
+        ("reading_middle", 0, 23, Some(Intent::Last)),
+        ("reading_middle", 30, 23, Some(Intent::Last)),
     ] {
         assert_eq!(
             target(name, point(col, row)),
@@ -192,6 +197,8 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
     let geometry = SurfaceGeometry::Article(ArticleGeometry {
         left: -10.,
         width: 700.,
+        height: 312.5,
+        top: 0.,
         body_height: 287.5,
         offset: 6256.25,
         whole_rows: None,
@@ -249,12 +256,14 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
 }
 
 #[test]
-fn web_reading_has_the_terminal_home_and_end_bands_after_links_and_back() {
+fn web_reading_home_and_end_take_the_top_row_and_footer_status_row() {
     let mut frame = Screen::new(80, 24).unwrap().frame();
     frame.rows = 838;
     let mut article = ArticleGeometry {
         left: -10.,
         width: 700.,
+        height: 312.5,
+        top: 0.,
         body_height: 287.5,
         offset: 6256.25,
         whole_rows: None,
@@ -265,34 +274,106 @@ fn web_reading_has_the_terminal_home_and_end_bands_after_links_and_back() {
         dpi: 1.25,
     };
     let at = |article: &ArticleGeometry, point: (f32, f32)| {
-        let cell = SurfaceGeometry::Article(article.clone()).cell(point, &frame);
-        crate::pointer::article_navigation(article, point, cell)
+        crate::pointer::article_navigation(article, point, frame.cols)
     };
-    // One 25 px row at each edge of the 287.5 px body, as in the terminal.
+    // As in the terminal: one 25 px Home row at the top of the 287.5 px
+    // body, page halves below it and End on the pinned footer status row.
     for (y, expected) in [
         (0., Some(Intent::First)),
         (24.9, Some(Intent::First)),
         (25., Some(Intent::PreviousPage)),
         (143., Some(Intent::PreviousPage)),
         (144., Some(Intent::NextPage)),
-        (262.4, Some(Intent::NextPage)),
-        (262.5, Some(Intent::Last)),
-        (287.4, Some(Intent::Last)),
-        (287.5, None),
+        (287.4, Some(Intent::NextPage)),
+        (287.5, Some(Intent::Last)),
+        (312.4, Some(Intent::Last)),
     ] {
         assert_eq!(at(&article, (300., y)), expected, "y={y}");
     }
-    // The left 17 columns keep Back priority inside the edge bands.
-    assert_eq!(at(&article, (53., 0.)), Some(Intent::Back));
+    // Home and End span their whole rows; Back keeps the left 17 columns
+    // only between them.
+    assert_eq!(at(&article, (53., 0.)), Some(Intent::First));
+    assert_eq!(at(&article, (53., 30.)), Some(Intent::Back));
     assert_eq!(at(&article, (53., 287.4)), Some(Intent::Back));
-    // A short body caps each band at a quarter of its height.
+    assert_eq!(at(&article, (53., 300.)), Some(Intent::Last));
+    // A short body caps the Home band at a quarter of its height.
     article.body_height = 60.;
     assert_eq!(at(&article, (300., 14.9)), Some(Intent::First));
     assert_eq!(at(&article, (300., 15.)), Some(Intent::PreviousPage));
-    assert_eq!(at(&article, (300., 45.)), Some(Intent::Last));
-    // A centred raster's left margin still goes Back.
+    assert_eq!(at(&article, (300., 45.)), Some(Intent::NextPage));
+    // A centred raster's left margin goes Back, below the Home band and
+    // above the footer, which stays End across the whole width.
     article.left = 40.;
-    assert_eq!(at(&article, (20., 0.)), Some(Intent::Back));
+    assert_eq!(at(&article, (20., 0.)), Some(Intent::First));
+    assert_eq!(at(&article, (20., 30.)), Some(Intent::Back));
+    assert_eq!(at(&article, (20., 70.)), Some(Intent::Last));
+    assert_eq!(at(&article, (690., 70.)), Some(Intent::Last));
+}
+
+#[test]
+fn web_reading_box_inset_matches_the_terminal_raster_and_its_black_bands() {
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 838;
+    // The terminal raster's box, centred 30 px down a 372.5 px view.
+    let article = ArticleGeometry {
+        left: -10.,
+        width: 700.,
+        height: 372.5,
+        top: 30.,
+        body_height: 287.5,
+        offset: 6256.25,
+        whole_rows: None,
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(837, 25, []).unwrap()),
+        line_width: 1000,
+        row: 25,
+        body_rows: 837,
+        dpi: 1.25,
+    };
+    let geometry = SurfaceGeometry::Article(article.clone());
+    assert!(geometry.cell((53., 29.9), &frame).is_none());
+    assert_eq!(
+        geometry.cell((53., 30.), &frame),
+        Some(Position { col: 5, row: 250 })
+    );
+    assert_eq!(
+        geometry.cell((53., 317.5), &frame),
+        Some(Position { col: 5, row: 837 })
+    );
+    assert!(geometry.cell((53., 342.5), &frame).is_none());
+    let span = |row| pttstella::selection::Span {
+        row,
+        start: 4,
+        end: 6,
+    };
+    assert_eq!(
+        geometry.span(&span(250), &frame),
+        Some(skia_safe::Rect::new(40., 30., 65., 48.75))
+    );
+    assert_eq!(
+        geometry.span(&span(837), &frame),
+        Some(skia_safe::Rect::new(40., 317.5, 65., 342.5))
+    );
+    let at = |point: (f32, f32)| crate::pointer::article_navigation(&article, point, frame.cols);
+    for (y, expected) in [
+        // The view's own edge bands, then the terminal's margin pages.
+        (0., Intent::First),
+        (24.9, Intent::First),
+        (27., Intent::PreviousPage),
+        // The box: Home row, halves, footer End.
+        (30., Intent::First),
+        (54.9, Intent::First),
+        (55., Intent::PreviousPage),
+        (317.4, Intent::NextPage),
+        (317.5, Intent::Last),
+        (342.4, Intent::Last),
+        (342.5, Intent::NextPage),
+        (347.5, Intent::Last),
+        (372.4, Intent::Last),
+    ] {
+        assert_eq!(at((300., y)), Some(expected), "y={y}");
+    }
+    assert_eq!(at((53., 60.)), Some(Intent::Back));
+    assert_eq!(at((53., 27.)), Some(Intent::PreviousPage));
 }
 
 #[test]
@@ -303,6 +384,8 @@ fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_heigh
     let mut article = ArticleGeometry {
         left: 0.,
         width: 960.,
+        height: 124.,
+        top: 0.,
         body_height: 100.,
         offset: flow.top(1) as f64 - 12.,
         whole_rows: None,
@@ -344,4 +427,47 @@ fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_heigh
     let geometry = SurfaceGeometry::Article(article.clone());
     assert_eq!(geometry.cell((6., 50.), &frame), None);
     assert_eq!(geometry.span(&span, &frame), None);
+}
+
+#[test]
+fn blank_sides_of_an_expanded_image_navigate_like_the_rows_beside_them() {
+    // 2026-11-26 report: rows holding an open image ignored every click,
+    // even beside the picture. The picture keeps its own control; the gap
+    // still has no cell, but its blank sides page and go Back as text does.
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 5;
+    let article = ArticleGeometry {
+        left: 0.,
+        width: 960.,
+        height: 124.,
+        top: 0.,
+        body_height: 100.,
+        offset: 0.,
+        whole_rows: None,
+        // Row 0, a 48 px image gap at 24..72, then rows 1-3.
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(4, 24, [(0, 48)]).unwrap()),
+        line_width: 960,
+        row: 24,
+        body_rows: 4,
+        dpi: 1.,
+    };
+    let geometry = SurfaceGeometry::Article(article.clone());
+    let at = |point: (f32, f32)| crate::pointer::article_navigation(&article, point, frame.cols);
+    for y in [30., 60.] {
+        assert_eq!(geometry.cell((600., y), &frame), None, "gap y={y}");
+    }
+    // Columns are 12 px; the left 17 end at x = 204 in the gap as in text.
+    assert_eq!(at((600., 30.)), Some(Intent::PreviousPage));
+    assert_eq!(at((600., 60.)), Some(Intent::NextPage));
+    assert_eq!(at((100., 60.)), Some(Intent::Back));
+    assert_eq!(at((203.9, 60.)), Some(Intent::Back));
+    assert_eq!(at((204., 60.)), Some(Intent::NextPage));
+    assert_eq!(
+        geometry.cell((203.9, 80.), &frame),
+        Some(Position { col: 16, row: 1 })
+    );
+    assert_eq!(at((203.9, 80.)), Some(Intent::Back));
+    assert_eq!(at((204., 80.)), Some(Intent::NextPage));
+    // The top band stays Home across the whole row, gap or not.
+    assert_eq!(at((100., 10.)), Some(Intent::First));
 }

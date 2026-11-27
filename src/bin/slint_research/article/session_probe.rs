@@ -90,6 +90,7 @@ pub fn start(
     let terminal = case == crate::session::Probe::ArticleTerminal;
     let long = case == crate::session::Probe::ArticleLong;
     let stall = case == crate::session::Probe::ArticleStall;
+    let back_load = case == crate::session::Probe::ArticleBackLoad;
     let input = case == crate::session::Probe::ArticleInput;
     Verification::start(
         ui,
@@ -145,10 +146,13 @@ pub fn start(
                 let top = ui.get_terminal_origin_y() + ui.get_raster_top();
                 for (col, row, expected) in [
                     (2., 10., crate::PointerKind::Back),
+                    (2., 0.25, crate::PointerKind::First),
                     (60., 0.25, crate::PointerKind::First),
                     (60., 5., crate::PointerKind::PreviousPage),
                     (60., 16., crate::PointerKind::NextPage),
-                    (60., 22.75, crate::PointerKind::Last),
+                    (60., 22.75, crate::PointerKind::NextPage),
+                    (2., 23.5, crate::PointerKind::Last),
+                    (60., 23.5, crate::PointerKind::Last),
                 ] {
                     let position = slint::LogicalPosition::new(
                         left + col * ui.get_raster_width() / 80.,
@@ -252,22 +256,41 @@ pub fn start(
                         && ui.get_article_active(),
                     "stale input changed the current surface",
                 )?;
-                // Web reading shares the terminal's Home/End bands, and an
-                // unmoved press keeps the navigation cursor until release.
+                // Like the terminal reader, the top row is Home and the pinned
+                // footer status row is End, both from their left edge where
+                // Back would otherwise win. An unmoved press keeps the
+                // navigation cursor until release.
                 owner.route_input(generation, b"\x1b[H".to_vec())?;
                 verification::foreground(&ui, true);
-                let x = ui.get_article_origin_x() + ui.get_article_line_width() * 0.6;
+                let x = ui.get_article_origin_x() + 4.;
                 let edge = |bottom: bool| {
-                    let top = ui.get_article_origin_y();
+                    let top = ui.get_article_origin_y() + ui.get_article_top();
                     slint::LogicalPosition::new(
                         x,
                         if bottom {
-                            top + ui.get_article_body_height() - 2.
+                            top + ui.get_article_body_height() + ui.get_article_line_height() / 2.
                         } else {
                             top + 2.
                         },
                     )
                 };
+                // The last body row above the footer pages, it is not End.
+                let last_row = slint::LogicalPosition::new(
+                    ui.get_article_origin_x() + ui.get_article_line_width() * 0.6,
+                    ui.get_article_origin_y() + ui.get_article_top() + ui.get_article_body_height()
+                        - 2.,
+                );
+                wait(
+                    || {
+                        ui.window()
+                            .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                                position: last_row,
+                            });
+                        ui.get_pointer_cursor() == crate::PointerKind::NextPage
+                    },
+                    "the last web reading body row did not page",
+                )
+                .await?;
                 for (bottom, expected) in [
                     (true, crate::PointerKind::Last),
                     (false, crate::PointerKind::First),
@@ -285,17 +308,30 @@ pub fn start(
                         "web reading hover did not choose its edge cursor",
                     )
                     .await?;
+                    // Mirror the native filter: a real press also marks the
+                    // window's button state, and the hold lasts several turns
+                    // so deferred `changed` callbacks run before release.
+                    ui.set_native_pointer_buttons(1);
+                    ui.set_native_pointer_down(true);
                     ui.window()
                         .dispatch_event(slint::platform::WindowEvent::PointerPressed {
                             position,
                             button,
                         });
-                    require(
-                        ui.get_selection_dragging()
-                            && !ui.get_selection_cursor()
-                            && ui.get_pointer_cursor() == expected,
-                        "pressing a web reading edge left its navigation cursor",
-                    )?;
+                    for turn in 0..15 {
+                        require(
+                            ui.get_selection_dragging()
+                                && !ui.get_selection_cursor()
+                                && ui.get_pointer_cursor() == expected,
+                            &format!(
+                                "holding a web reading edge left its navigation cursor after {turn} turns: {:?}",
+                                ui.get_pointer_cursor()
+                            ),
+                        )?;
+                        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                    }
+                    ui.set_native_pointer_buttons(0);
+                    ui.set_native_pointer_down(false);
                     ui.window()
                         .dispatch_event(slint::platform::WindowEvent::PointerReleased {
                             position,
@@ -399,6 +435,74 @@ pub fn start(
                     !ui.get_article_station(),
                     "explicit reading restore stayed in raw mode",
                 )?;
+            } else if back_load {
+                // 2026-11-27 report: some long articles needed two Back
+                // clicks. The station holds its reply to the preload PageDown
+                // while one click lands in web reading's Back zone.
+                use slint::platform::{PointerEventButton, WindowEvent};
+                // Web reading stays interactive while only its own page
+                // request is pending: the click must land before the reply.
+                let mut seen = (0, false, false);
+                let ready = wait(
+                    || {
+                        verification::foreground(&ui, true);
+                        seen = (
+                            owner.requests.get(),
+                            ui.get_article_active(),
+                            output.as_ref().is_some_and(|o| o.current(&ui).is_some()),
+                        );
+                        seen == (1, true, true) && connection.updates.borrow().input_pending
+                    },
+                    "",
+                )
+                .await;
+                ready.map_err(|_| {
+                    format!(
+                        "web reading ignored clicks while its page request was pending: requests, active, current = {seen:?}"
+                    )
+                })?;
+                let position = slint::LogicalPosition::new(
+                    ui.get_article_origin_x() + 4.,
+                    ui.get_article_origin_y()
+                        + ui.get_article_top()
+                        + ui.get_article_body_height() / 2.,
+                );
+                wait(
+                    || {
+                        ui.window()
+                            .dispatch_event(WindowEvent::PointerMoved { position });
+                        ui.get_pointer_cursor() == crate::PointerKind::Back
+                    },
+                    "web reading Back zone missing during the page load",
+                )
+                .await?;
+                let button = PointerEventButton::Left;
+                ui.set_native_pointer_buttons(1);
+                ui.set_native_pointer_down(true);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerPressed { position, button });
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                ui.set_native_pointer_buttons(0);
+                ui.set_native_pointer_down(false);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerReleased { position, button });
+                ui.window().dispatch_event(WindowEvent::PointerExited);
+                wait(
+                    || {
+                        verification::foreground(&ui, true);
+                        matches!(
+                            connection.updates.borrow().context(),
+                            Context::ArticleList { .. }
+                        )
+                    },
+                    "one mouse Back during a page load did not leave the article",
+                )
+                .await?;
+                require(
+                    !ui.get_article_active(),
+                    "the article list still showed web reading",
+                )?;
+                verification::capture(&ui, &directory, "back-during-load.png")?;
             } else if stall {
                 let started = std::time::Instant::now();
                 wait(

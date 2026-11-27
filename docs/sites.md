@@ -4,7 +4,9 @@
 
 從浮球「連線 → 站點」選擇「PTT（WSS）」或「PTT（SSH）」，再按「連線切換」。兩個按鈕先填入站點與 Big5-UAO，可用「設為預設」保存下次啟動的選擇。切換或保存回覆前停用表單，失敗保留草稿與原因。移除最愛與儲存預設是獨立操作。
 
-一般連線接受 `wss://` 與 PTT 官方 `ssh://bbs@ptt.cc`。WSS 使用系統信任根驗證憑證與主機名稱。SSH 使用固定的 `bbs` 公開服務帳號與 port 22，協商 RSA-SHA2，核對站方公布的 RSA SHA-256 指紋後才開啟 80×24 的 BBS 工作階段。SSH 的 Big5-UAO 資料直接進格線。PTT 帳密仍在 BBS 帳號提示後輸入。金鑰不符時終止連線。入口與指紋見 [PTT 官方首頁](https://www.ptt.cc/index.html?lang=zh) 與 [站方金鑰公告](https://www.ptt.cc/bbs/SYSOP/M.1728132668.A.BB7.html)。
+一般連線接受 `wss://` 與 PTT 官方 `ssh://bbs@ptt.cc`。WSS 使用系統信任根驗證憑證與主機名稱。SSH 使用固定的 `bbs` 公開服務帳號與 port 22，主機金鑰優先協商 Ed25519，其次 RSA-SHA2，不接受 SHA-1 的 `ssh-rsa`。金鑰須符合站方公布的 SHA-256 指紋，才開啟 80×24 的 BBS 工作階段。SSH 的 Big5-UAO 資料直接進格線。PTT 帳密仍在 BBS 帳號提示後輸入。金鑰不符時終止連線。入口與指紋見 [PTT 官方首頁](https://www.ptt.cc/index.html?lang=zh) 與 [站方金鑰公告](https://www.ptt.cc/bbs/SYSOP/M.1728132668.A.BB7.html)。
+
+公告列出 RSA 3072 指紋，並說明現行金鑰指紋登載於 `ptt.cc` 的 DNS SSHFP 紀錄。Ed25519 指紋 `SHA256:oTf7wY7klc9gi0FHhYQNHQu7aJfYGz/bFLSpdOxhbxg` 取自該紀錄（2026-11-27 以兩個 resolver 查詢），同組 RSA 紀錄與公告指紋一致。`ptt.cc` 沒有 DNSSEC，所以指紋寫死在程式中，執行時不查 DNS。站方更換金鑰時需更新程式。2026-11-27 使用者實測，站端只提供 `ssh-ed25519`、`ecdsa-sha2-nistp256` 與 `ssh-rsa`，不再提供 RSA-SHA2。
 
 Telnet、明文 WebSocket 與省略協定的舊端點可從原設定讀取及移除。一般連線會拒絕這些端點，也不能新增為最愛或預設站。舊預設使用停用的傳輸時，本次啟動連至 PTT WSS 並提示重新選擇，保留原設定供管理。明文傳輸限顯式開啟的本機合成測試。位址上限 512 bytes，禁止密碼、query 與 fragment。三個官方網頁終端入口可轉成 WSS，SSH 端點限上述 PTT 入口。
 
@@ -26,4 +28,6 @@ Slint 合成站點表單可用 `PTTSTELLA_SLINT_SITE_SWITCH=same-endpoint pttste
 
 站點表單依面板內容區域配置，避免視窗較寬時裁掉表單兩側及「連線切換」。X11 重跑可設定 `PTTSTELLA_SLINT_SITE_SWITCH=native-same-endpoint` 和 `PTTSTELLA_SLINT_SETTINGS_PROBE=native-quit`，沿用同一組啟動參數。在站點表單保留位址，先選 GBK 並點「連線切換」，再選 Big5-UAO 並點同一按鈕，最後正常關窗。探針期待三次同位址連線、三次 Close 及零站端輸入。驗證使用本機合成站。
 
-SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。
+SSH 等待終端與 shell 請求的回覆時，略過 RFC 4254 允許先到的視窗調整與 xon-xoff 通知，其餘訊息視為拒絕。OpenSSH 啟動 shell 時會先擴大視窗，再回覆請求。
+
+SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、正式演算法清單可與只提供 Ed25519／ECDSA 的站端協商、80×24 終端請求、回覆前的視窗／流量通知、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。

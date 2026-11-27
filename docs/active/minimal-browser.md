@@ -1,5 +1,69 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-27 長文載入中點一次返回即離開
+
+使用者回報有些文章用滑鼠點左側返回要按兩次才能離開（PTT 實站，滑鼠）。以合成探針重現：網頁閱讀的載入器送出下一頁後，站端回覆前 `input_pending` 為真，文章 output identity 因此失效，網頁閱讀上的點擊、游標與導覽全部被丟掉，沒有提示；長文載入時幾乎一直有下一頁在等回覆，所以第一下常被吃掉。即使點擊被接受，返回走站端導覽也會因「等待站端更新畫面」被拒絕。
+
+修正：文章 session 記下自己的頁面請求是從哪個輸入 epoch 的畫面送出；網頁閱讀時，若等待中的只有這一筆（epoch 只差一），output identity 與 `can_navigate` 照常放行，其他明確輸入仍讓點擊失效。網頁閱讀的滑鼠返回改走與鍵盤 ← 相同的文章輸入路徑，由 connection 排在頁面請求之後送出。新增 `--probe-article-back-load`：假站端扣住第一個 PageDown 的回覆 1.5 秒，探針須在這段期間看到返回游標、點一次左側，站端依序收到 PageDown 與 ←，回到文章列表；修改前此探針以「web reading ignored clicks while its page request was pending」失敗。
+
+驗證：bin 單元測試 116 項通過、1 項原有 ignored，connection 單元測試 109 項通過；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。依 CONTRIBUTING 只跑網頁閱讀相關的合成視窗探針，19 項全部通過：新的 back-load，以及文章輸入／輸出／全文／貼上／尋找、保活、長文、分段、換篇、停滯、文章視窗、右鍵選單、媒體、行內圖片、推文更新（append／mixed-append）、推文與 shell；純終端的探針未跑。合成探針用工具包事件，不是 OS 滑鼠。輸出在 `.local/verification/back-during-load/`，`before.log` 為修改前的失敗紀錄。PTT 實站長文的實際點擊尚待使用者確認。
+
+## 2026-11-27 PTT SSH 改用 Ed25519 主機金鑰
+
+使用者以 `0f2e05c` 測試版在 macOS 實測，切到 PTT（SSH）仍失敗：「無法連線: No common Key algorithm - ours: ["rsa-sha2-512", "rsa-sha2-256"], theirs: ["ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"]」。PTT 站端不再提供 RSA-SHA2 簽章，只剩 Ed25519、ECDSA P-256 與 SHA-1 的 `ssh-rsa`。PTTStella 只接受 RSA-SHA2，所以在金鑰交換時就失敗。這才是使用者回報的原因，不限 macOS。下方視窗通知修正仍適用於 OpenSSH，但不是這次的原因。
+
+站方公告只列 RSA 指紋，並說明現行指紋登載於 DNS SSHFP。2026-11-27 以系統 resolver 和 8.8.8.8 查詢 `ptt.cc` SSHFP，結果一致：RSA SHA-256 與公告相同，Ed25519 為 `SHA256:oTf7wY7klc9gi0FHhYQNHQu7aJfYGz/bFLSpdOxhbxg`。`ptt.cc` 沒有 DNSSEC。演算法改為 Ed25519 優先、RSA-SHA2 次之，指紋寫死為 Ed25519 與 RSA 兩筆，不接受 SHA-1 的 `ssh-rsa`。新增測試讓合成 server 只提供 Ed25519／ECDSA P-256，正式演算法清單須通過協商並到達指紋核對；修正前以同樣的「No common Key algorithm」失敗，修正後通過。
+
+驗證：connection 單元測試 110 項（含 SSH 5 項）、bin 116 項通過，1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針都不經過 SSH，未跑。使用者以 `d36a421` 測試版（macOS arm64）實測 PTT（SSH），回報可以連線。Windows、Linux 與 Intel Mac 未實測。
+
+## 2026-11-27 PTT SSH 略過回覆前的視窗通知
+
+使用者回報 macOS 切到 PTT（SSH）後無法連線，WSS 正常。以本機 OpenSSH 9.9p2 sshd 重現（127.0.0.1、RSA 主機金鑰）：金鑰交換 mlkem768x25519-sha256／rsa-sha2-512 與 pty 請求成功，但 OpenSSH 啟動 shell 時先送 `CHANNEL_WINDOW_ADJUST`，再回 `CHANNEL_SUCCESS`。等待回覆只接受下一則訊息為 Success，把視窗通知當成拒絕，連線失敗並顯示「無法連線: SSH terminal request refused」。三次重跑結果相同。這是共用用戶端邏輯，不限 macOS。11-05 實站可到登入提示，PTT 站端目前的訊息順序未查證，一般測試不連 PTT。
+
+改為等待回覆時略過視窗調整與 xon-xoff 通知，其餘訊息仍視為拒絕，等待時間受 15 秒 dial 期限約束。新增合成 peer 測試：server 視窗 32 bytes，先收一筆資料觸發視窗調整，回覆 shell 前再送 xon-xoff；修正前失敗，修正後通過。修正版對同一 OpenSSH 完成 pty、shell、登入文字、原始 Big5 bytes 往返，關閉回報 TransportClosed。
+
+驗證：connection 單元測試 109 項（含 SSH 4 項）、bin 116 項通過，1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針都不經過 SSH，這次未跑。macOS 實站 SSH 登入提示待使用者確認。
+
+## 2026-11-26 準備 0.5.1
+
+使用者要求發佈 0.5.1，內容為 0.5.0 之後的網頁閱讀與滑鼠修正；11-27 另要求併入 PTT SSH 連線修正。見 [發佈流程](../releases.md#051-發佈準備2026-11-26) 與 [v0.5.1 release notes](../release-notes/v0.5.1.md)。依 CONTRIBUTING，發佈 commit 上跑完整合成視窗探針組；結果見下方補記。
+
+## 2026-11-26 移除底部網址提示列
+
+使用者回報畫面底下偶爾閃出一個 Slint 物件。來源是第一版 Slint 介面就有的網址提示列：滑鼠停在網址上時，在 PTT 畫面最底部顯示 26 px 高的全寬深色條及完整網址，蓋住底部狀態列；翻頁或畫面更新後若網址剛好落在靜止的滑鼠下，也會突然出現。使用者決定直接移除，理由是 PTT 能點的目標本身就是網址文字。網址仍以手形游標提示，點擊、右鍵複製完整網址與媒體預覽不變。
+
+驗證：單元測試 116 項通過、1 項原有 ignored；Clippy `-D warnings`、`cargo fmt --check` 通過。媒體探針原本要求停用 hover 時網址列仍有內容，改為只要求連結游標。媒體、行內圖片、右鍵選單、文章視窗、文章輸入／輸出等其餘視窗探針也通過；帳號動作探針仍以修改前就有的同樣訊息失敗，未處理。輸出在 `.local/verification/link-url-bar/`。
+
+## 2026-11-26 展開圖片兩側沿用正文導覽
+
+使用者以實機截圖回報：文章中打開圖片後，圖片佔用的那幾列全部點了不能往下，即使點在圖片沒蓋到的兩側。原因是網頁閱讀的命中判定遇到圖片間隙（沒有文字列的高度）就整列不處理，原本是為了不讓圖片區落入選字、返回或翻頁；但 Slint 版圖片本身有自己的 TouchArea（點擊開預覽、右鍵選單），會先接走圖片上的點擊，能落到正文 pointer 的只剩兩側空白。
+
+改為間隙只略過網址／ID／選字（仍沒有 terminal cell），兩側空白照旁邊正文列的規則導覽：左側 17 欄返回，其餘依可視上／下半翻頁，最上一列仍為 Home。返回欄位改由 x 以與 `Size::hit` 相同的欄界換算（新增 `Size::column`），不再依賴文字格，部分隱藏列也一併適用。
+
+驗證：單元測試 116 項通過、1 項原有 ignored（新增圖片間隙兩側的返回／翻頁與欄界測試）；Clippy `-D warnings`、`cargo fmt --check` 通過。行內圖片視窗探針新增：展開 PNG 後，滑鼠移到圖片左側須出現返回游標、右側須出現翻頁游標；暫時恢復舊的間隙規則時此探針以「left side of an expanded image did not go Back」失敗，換回修正後通過。合成視窗探針用工具包事件，不是 OS 滑鼠。文章視窗、文章輸入／輸出／全文／貼上／尋找、終端尋找／翻頁、保活、長文、分段、換篇、終端換篇、停滯、右鍵選單、浮球、媒體、推文更新（append／mixed-append）、推文、收藏 current／headerless 與 shell 探針也通過；inline 選單 `all` 與帳號動作探針仍以修改前就有的同樣訊息失敗，未處理。輸出在 `.local/verification/article-image-sides/`，`baseline-inline` 為恢復舊規則時的失敗紀錄。實機點擊圖片兩側是否能翻頁，尚待使用者確認。
+
+## 2026-11-26 網頁閱讀與終端機共用 BBS 框
+
+使用者以實機截圖回報：進入文章時底部多一條東西，進出文章時 PTT 畫面快速縮放，眼睛不舒服。截圖為 1920×1080、縮放 1 倍的全螢幕視窗：文章右側與底部各留 12 px 捲軸空間，列高由 45 px 變為 44 px，左緣由 60 px 移到 74 px，底部是沒有內容可捲的水平捲軸條。原因是網頁閱讀以扣掉兩條捲軸的大小另算列高並向下取整，正文又填滿整個視窗高度；終端機則以連續比例縮放後置中。
+
+終端機點陣改用 `Size::row` 的整數像素列高（寬 40 倍、高 24 倍，每列等高），網頁閱讀以同一函式排版並採用同一置中位置：正文為框內頁尾以上的 23 列，頁尾為框的最後一列。只有縮放超出視窗時，框才在該方向填滿；水平超出時才在頁尾下方保留 12 px 捲軸條。直向捲軸覆蓋於視窗右緣，黑邊夠寬時畫在黑邊內，否則只畫把手。文章改由單一 pointer 涵蓋整個視圖並回報視圖座標，Rust 幾何新增 `top`／`height`，框外上下黑邊與終端機相同（邊帶為 Home／End，其餘為上／下一頁）；選取框、推文側標、圖片右鍵及輸入法位置一併加上框的位移。較高的視窗不再以多出的高度顯示更多正文，與 Dioxus 版維持 BBS 長寬的做法一致。
+
+驗證：單元測試 115 項通過、1 項原有 ignored（新增終端點陣整數列高、文章框與點陣同框、框外黑邊命中與選取位移）；Clippy `-D warnings`、`cargo fmt --check` 與 docs 通過。合成視窗探針用工具包事件，不是 OS 滑鼠。文章視窗探針連續兩次通過，涵蓋捲軸點擊／拖曳、單軸 resize、縮放後的水平捲軸條，以及末列逐像素比對。文章輸入／輸出／全文／貼上／尋找、終端尋找／翻頁、保活、長文、分段、換篇、終端換篇、停滯、右鍵選單、浮球、行內圖片、推文更新（append／mixed-append）、推文、收藏 current／headerless 與 shell 探針也通過。媒體 hover 第一次在同連結停留時逾時，之後連續兩次通過，判為時序抖動。inline 選單 `all` 與帳號動作探針在未修改的基準上以同樣訊息失敗（缺少 all-from-zero 選單項；選單未辨識帳號），並非本次造成，尚未處理。Slint 繪圖稽核測試自繪場景、不使用 `Size::fit`，本次未執行。
+
+探針調整：文章視窗探針的直向捲軸改點視窗右緣；原本寬度 +4 px 的 resize 改為縮小不決定列高的那一邊；分數捲動先離開整列邊界再量。其餘文章探針的座標改加上框的位移。輸出在 `.local/verification/article-raster-box/`，`baseline/` 為未修改版本的對照。1080p 全螢幕與 Retina 視窗實際進出文章是否不再跳動，尚待使用者實機確認。
+
+## 2026-11-25 閱讀首尾移到狀態列與按住游標
+
+使用者以正式 0.5.0 實機回報：網頁閱讀的 End 落在倒數第二行，最上一行與最下面的頁尾狀態列都沒有首尾箭頭；按住滑鼠時游標變回系統箭頭。網頁閱讀與終端閱讀改為最上一行 Home、頁尾狀態列整列 End（含左側標籤），兩者先於左緣返回，頁尾上方那一行恢復為下一頁；列表首尾不變。
+
+按住游標：探針改為設定原生按鍵狀態並按住 300 ms，Rust 的命中與游標狀態全程不變，所以原因不在命中判定。winit 後端只在下一個視窗事件開頭才裝上自訂游標；滑鼠靜止後按下，等待中的導覽箭頭才在按下時套用，推斷是這一步讓 macOS 在按住期間改顯示系統箭頭。補送游標後改為立即要求重繪，拖曳開始／結束選字時也補送，文字游標不再慢一拍。這個原因是推斷，尚未以原生滑鼠證實，需使用者實機確認。
+
+pointer 單元測試，以及文章輸入、終端翻頁、全文載入、貼上、輸出、尋找、右鍵選單、浮球、媒體、推文與 shell 探針通過；探針使用工具包事件，不是 OS 原生滑鼠。
+
+## 2026-11-23 0.5.0 已發佈
+
+使用者要求在實機驗收前合併 Release PR #12，正式工作 45172233180 已建立 `v0.5.0` tag（`df6f083`）與 Latest Release，下載檔校驗一致；發佈後依使用者要求在 Release 說明補上 Apple Silicon Mac 的效能比較。`develop` 改為 `0.6.0-dev.1`。Windows、macOS 升級／回退、Intel Mac 與 Linux 的實機驗收仍未執行，詳見 [自動發佈](../releases.md#050-發佈結果2026-11-23)。
+
 ## 2026-11-23 0.5.0 發佈準備
 
 使用者決定保留已合併 Slint 的 `main`（`d316f7f`，其 Desktop Release 被來源驗證擋下、未發佈），改由 0.5.0 接續，並要求準備發佈。`main` 先合併回 `develop`（`53f499d`），再把版號、README、徽章與 Windows 安裝說明改為 0.5.0，新增 v0.5.0 release notes；詳細內容與尚缺的實機驗收記在 [自動發佈](../releases.md#050-發佈準備2026-11-23)。Release PR 開好後停在合併前，由使用者決定是否先補 Windows／macOS 升級與 Intel Mac／Linux 實機驗收。
